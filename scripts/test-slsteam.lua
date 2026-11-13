@@ -87,6 +87,23 @@ w("FakeAppIds: {1: 2}\n")
 ok, msg = slsteam.set_fake_appid(9)
 check("F4 inline refused", ok == false)
 
+-- F4b: the empty flow map ("FakeAppIds: {}") used by slsteam-moon's sample
+-- config is promoted to a block instead of being refused, so the Spacewar
+-- toggle works on a fresh profile. A trailing comment survives.
+w("FakeAppIds: {}   # empty\n")
+ok, msg = slsteam.set_fake_appid(620)
+c = r()
+check("F4b empty flow map accepted", ok == true and msg == "added")
+check("F4b promoted to a block map",
+  c:find("FakeAppIds:%s*# empty") ~= nil and c:find("620:%s*480") ~= nil)
+slsteam.set_fake_appid(621)
+c = r()
+local _, headers = c:gsub("FakeAppIds%s*:", "")
+check("F4b header not duplicated", headers == 1)
+w("FakeAppIds: {}\n")
+ok, msg = slsteam.unset_fake_appid(620)
+check("F4b unset on empty flow map -> not_present", ok == true and msg == "not_present")
+
 -- F5: preserve comments + a sibling mapping while adding another.
 w("FakeAppIds:\n  730: 480   # existing\nSafeMode: no\n")
 ok, msg = slsteam.set_fake_appid(440)
@@ -116,6 +133,38 @@ ok, msg, c = slsteam.purge_store_for_lua(store_lua)
 os.execute = real_execute
 check("F6b manifest purge failure is reported", ok == false and type(msg) == "string")
 os.remove(store_lua)
+
+-- The purge and the config editors must follow the profile of the RUNNING
+-- client (its XDG_CONFIG_HOME), not a hardcoded ~/.config/SLSsteam.
+local profile_root = sandbox .. "/active-profile"
+os.execute("mkdir -p '" .. profile_root .. "/SLSsteam/manifests'")
+local active_manifest = assert(io.open(
+  profile_root .. "/SLSsteam/manifests/321_123.manifest", "wb"))
+active_manifest:write("manifest")
+active_manifest:close()
+local profile_lua = sandbox .. "/store-profile.lua"
+local profile_file = assert(io.open(profile_lua, "wb"))
+profile_file:write("addappid(321)\n")
+profile_file:close()
+test_env.XDG_CONFIG_HOME = profile_root
+ok, msg, c = slsteam.purge_store_for_lua(profile_lua)
+check("F6c active-profile manifests are purged", ok == true and msg == 1 and
+  io.open(profile_root .. "/SLSsteam/manifests/321_123.manifest", "rb") == nil)
+os.remove(profile_lua)
+
+local profile_config = profile_root .. "/SLSsteam/config.yaml"
+local profile_cfg_file = assert(io.open(profile_config, "wb"))
+profile_cfg_file:write("PlayNotOwnedGames: yes\n")
+profile_cfg_file:close()
+ok, msg = slsteam.set_fake_appid(285900)
+local profile_text = ""
+local read_profile = io.open(profile_config, "rb")
+if read_profile then profile_text = read_profile:read("*a") or ""; read_profile:close() end
+check("F6d settings are written to the active profile",
+  ok == true and profile_text:find("285900:%s*480") ~= nil)
+check("F6d settings are not written to the inactive profile",
+  r():find("285900") == nil)
+test_env.XDG_CONFIG_HOME = nil
 
 -- F7: unset removes the mapping; absent -> not_present.
 w("FakeAppIds:\n  285900: 480\n  620: 480\n")

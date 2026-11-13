@@ -9,26 +9,24 @@
 --   * Edits preserve comments, ordering and unrelated keys.
 --   * Atomic writes ensure watchers only observe complete files.
 
+local sls_profile = require("sls_profile")
+
 local slsteam = {}
 
-local function config_root()
-  local xdg = os.getenv("XDG_CONFIG_HOME")
-  if xdg and xdg ~= "" then return xdg end
-  local home = os.getenv("HOME") or ""
-  if home == "" then return nil end
-  return home .. "/.config"
-end
-
+-- Follow the profile of the RUNNING client, not our own environment: a 64-bit
+-- launcher (SLSsteam-Careca-x64 and friends) starts Steam with its own
+-- XDG_CONFIG_HOME, so the default ~/.config/SLSsteam may belong to a different,
+-- inactive install. See sls_profile.lua.
 local function config_path()
-  local root = config_root()
+  local root = sls_profile.root()
   if not root then return nil end
-  return root .. "/SLSsteam/config.yaml"
+  return root .. "/config.yaml"
 end
 
 local function cache_dir()
-  local root = config_root()
+  local root = sls_profile.root()
   if not root then return nil end
-  return root .. "/SLSsteam/cache"
+  return root .. "/cache"
 end
 
 local function shell_single_quote(value)
@@ -204,10 +202,17 @@ local function fakeappids_header(lines)
   return nil
 end
 
-local function fakeappids_is_inline(lines, header_idx)
+local function fakeappids_inline_code(lines, header_idx)
   local after = lines[header_idx]:match("^FakeAppIds%s*:%s*(.-)%s*$") or ""
-  local code_only = after:gsub("#.*$", ""):gsub("%s+$", "")
-  return code_only ~= ""
+  return (after:gsub("#.*$", ""):gsub("%s+$", ""))
+end
+
+-- YAML flow-map forms are not rewritten. The one exception is "{}" (an empty
+-- map, which slsteam-moon's own sample config uses): set_fake_appid converts it
+-- to a block before inserting. Any other inline content is left untouched.
+local function fakeappids_is_inline(lines, header_idx)
+  local code = fakeappids_inline_code(lines, header_idx)
+  return code ~= "" and code ~= "{}"
 end
 
 -- Walk the map block under the header. Returns (entries, last_entry_idx,
@@ -270,6 +275,11 @@ function slsteam.set_fake_appid(appid, fake)
     header_idx = #lines
   elseif fakeappids_is_inline(lines, header_idx) then
     return false, "FakeAppIds: has an inline value, refusing to rewrite"
+  elseif fakeappids_inline_code(lines, header_idx) == "{}" then
+    -- Empty flow map ("FakeAppIds: {}"): promote it to a block map, keeping a
+    -- trailing comment if there is one.
+    local comment = lines[header_idx]:match("#.*$")
+    lines[header_idx] = "FakeAppIds:" .. (comment and ("  " .. comment) or "")
   end
 
   local entries, last_entry_idx, indent = scan_map_block(lines, header_idx)
@@ -320,20 +330,20 @@ end
 -- Purge archived manifests for every depot referenced by a .lua, BEFORE the
 -- .lua is deleted (it's what tells us which depots belong to the game).
 -- Reads `addappid(<id> ...)` ids and deletes
--- ~/.config/SLSsteam/manifests/<id>_*.manifest for each (no-op when absent).
+-- <profile>/manifests/<id>_*.manifest for each (no-op when absent).
 -- The persistent store (ManifestStore in slsteam-moon) keeps every manifest
 -- version a game ever staged; when the user removes the game via LuaTools its
 -- archived manifests would otherwise linger forever, so drop them here.
 -- Returns true,count | false,error.
 function slsteam.purge_store_for_lua(lua_path)
-  local root = config_root()
+  local root = sls_profile.root()
   if not root then return false, "HOME not set" end
   local f = io.open(lua_path, "rb")
   if not f then return true, 0 end
   local data = f:read("*a") or ""
   f:close()
 
-  local store = root .. "/SLSsteam/manifests"
+  local store = root .. "/manifests"
   local seen, count = {}, 0
   for id in data:gmatch("addappid%s*%(%s*(%d+)") do
     if not seen[id] then
