@@ -254,4 +254,33 @@ local ordered=merge.install(APP,root,ordered_opts)
 check("source priority is independent of traversal order",ordered~=nil and
   ordered_files["/home/test/.config/SLSsteam/manifests/11_"..G11..".manifest"]==manifest(11,G11,100))
 
+-- A 64-bit launcher runs Steam with a private XDG_CONFIG_HOME. LuaTools passes
+-- that profile as opts.sls_dir: manifests, pin/import sync and the publish
+-- journal must all land there, never in the inactive ~/.config/SLSsteam.
+local prof_files,prof_opts=harness({
+  [root.."/source_0000/.source-name"]="Hubcap", [root.."/source_0000/.source-priority"]="0\n",
+  [root.."/source_0000/"..APP..".lua"]='addappid('..APP..')\naddappid(11,1,"'..K1..'")\n',
+  [root.."/source_0000/11_"..G11..".manifest"]=manifest(11,G11,100),
+  ["/home/test/.config/SLSsteam-careca-x64/SLSsteam/config.yaml"]="ManifestPins:\n",
+  ["/home/test/.config/SLSsteam-careca-x64/SLSsteam/lumen_lua_imports.txt"]="",
+})
+prof_opts.sls_dir="/home/test/.config/SLSsteam-careca-x64/SLSsteam"
+prof_opts.sync_pins=true
+local prof_installed,prof_err=merge.install(APP,root,prof_opts)
+check("sls_dir installs into the active profile",prof_installed~=nil and prof_err==nil)
+local prof_config=prof_files["/home/test/.config/SLSsteam-careca-x64/SLSsteam/config.yaml"] or ""
+check("sls_dir rewrites pins in the active config",
+  prof_config~="ManifestPins:\n" and prof_config:find("ManifestPins",1,true)==nil)
+check("sls_dir never creates the inactive config",
+  prof_files["/home/test/.config/SLSsteam/config.yaml"]==nil)
+check("sls_dir routes the manifest store to the active profile",
+  prof_files["/home/test/.config/SLSsteam-careca-x64/SLSsteam/manifests/11_"..G11..".manifest"]~=nil)
+check("sls_dir leaves the inactive manifest store untouched",
+  prof_files["/home/test/.config/SLSsteam/manifests/11_"..G11..".manifest"]==nil)
+check("sls_dir records the source import in the active profile",
+  (prof_files["/home/test/.config/SLSsteam-careca-x64/SLSsteam/lumen_lua_imports.txt"] or "")
+    :find(tostring(APP),1,true)~=nil)
+check("sls_dir consumes its journal in the active profile",
+  prof_files["/home/test/.config/SLSsteam-careca-x64/SLSsteam/.luatools-publish.journal"]==nil)
+
 if fails==0 then print("\nALL TESTS OK") else print("\n"..fails.." FAILED"); os.exit(1) end

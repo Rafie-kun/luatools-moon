@@ -12,6 +12,7 @@ local cjson = require("json")
 local smart_merge = require("smart_merge")
 local lua_tools_manifest = require("lua_tools_manifest")
 local source_limits = require("source_limits")
+local sls_profile = require("sls_profile")
 
 local downloads = {}
 local DOWNLOAD_STATE = {}
@@ -142,14 +143,26 @@ local function _positive_appid(value)
     return number
 end
 
+-- Directory that CONTAINS `SLSsteam` for the profile the running client uses.
+-- LuaTools is a separate process and may not share Steam's XDG_CONFIG_HOME, so
+-- never assume ~/.config here (see sls_profile.lua). The fallback keeps the old
+-- layout when HOME is unavailable.
+local function _sls_dir(home)
+    local root = sls_profile.root()
+    if root then return root end
+    return fs.join(home or "", ".config", "SLSsteam")
+end
+
 local function _merge_options(appid, sync_pins)
     local base_path = steam_utils.detect_steam_install_path()
     local home = m_utils.getenv("HOME") or os.getenv("HOME") or ""
-    local appinfo_path = fs.join(home, ".config", "SLSsteam", "cache",
+    local sls_dir = _sls_dir(home)
+    local appinfo_path = fs.join(sls_dir, "cache",
         "picsbuffer_" .. tostring(appid) .. ".bin")
     local appinfo_text = fs.exists(appinfo_path) and (m_utils.read_file(appinfo_path) or "") or ""
     return {
         home = home,
+        sls_dir = sls_dir,
         steam_root = base_path,
         appinfo_text = appinfo_text,
         read_file = m_utils.read_file,
@@ -168,8 +181,8 @@ local function _merge_options(appid, sync_pins)
             return result == true or result == 0
         end,
         sync_pins = sync_pins == true,
-        config_path = fs.join(home, ".config", "SLSsteam", "config.yaml"),
-        imports_path = fs.join(home, ".config", "SLSsteam", "lumen_lua_imports.txt"),
+        config_path = fs.join(sls_dir, "config.yaml"),
+        imports_path = fs.join(sls_dir, "lumen_lua_imports.txt"),
     }
 end
 
@@ -530,7 +543,7 @@ end
 
 local function _write_coverage(appid, coverage_file)
     local home = m_utils.getenv("HOME") or os.getenv("HOME") or ""
-    local appinfo_path = fs.join(home, ".config", "SLSsteam", "cache",
+    local appinfo_path = fs.join(_sls_dir(home), "cache",
         "picsbuffer_" .. tostring(appid) .. ".bin")
     local depot_info = {}
     if fs.exists(appinfo_path) then
