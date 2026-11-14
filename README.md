@@ -2,11 +2,22 @@
 
 ## Install
 
-Set up slsteam-moon, Lumen and the LuaTools plugin automatically with a single command:
+Set up slsteam-moon, Lumen and the LuaTools plugin automatically with a single command.
+
+This fork — same installer, plus the store button fix and the Workshop writer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash
 ```
+
+The original upstream line, if you'd rather have stock `swwayps` releases
+(their plugin release is still v2.9, so the store button stays missing there):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/install.sh | bash
+```
+
+Both accept the same flags; swap the URL to pick which releases you get.
 
 > **Requirements:** Linux x86_64 and **native Steam** installed from your package
 > manager. Flatpak and Snap Steam are not supported.
@@ -57,4 +68,10 @@ Want to remove everything? Run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/uninstall.sh | bash
+```
+
+Or with the upstream one, which is the same script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/uninstall.sh | bash
 ```
