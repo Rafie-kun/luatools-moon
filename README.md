@@ -5,7 +5,7 @@
 Set up slsteam-moon, Lumen and the LuaTools plugin automatically with a single command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash
 ```
 
 > **Requirements:** Linux x86_64 and **native Steam** installed from your package
@@ -39,7 +39,7 @@ Reference material:
 
 ## Support
 
-Open an issue: https://github.com/swwayps/luatools-moon/issues
+Open an issue: https://github.com/Rafie-kun/luatools-moon/issues
 
 ## Uninstall
 

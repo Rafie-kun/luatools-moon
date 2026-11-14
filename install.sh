@@ -42,12 +42,12 @@ SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
 # new version (e.g. v2.5-lumen) needs no installer edit.
 SLS_ASSET_GLOB="^${SLS_ASSET_PREFIX}-.*-lumen\\.zip$"
 
-PLUGIN_REPO="swwayps/luatools-moon"
+PLUGIN_REPO="Rafie-kun/luatools-moon"
 PLUGIN_ASSET="luatools-linux.zip"
 PLUGIN_BETA_PATH="dist/luatools-linux.zip"
 PLUGIN_NAME="luatools"                          # plugin.json "name"
 
-LUMEN_REPO="swwayps/lumen"
+LUMEN_REPO="Rafie-kun/lumen"
 LUMEN_ASSET="lumen-linux.zip"
 LUMEN_BETA_PATH="dist/lumen-linux.zip"
 LUMEN_DIR="$HOME/.local/share/Lumen"            # binary + lua/ + luatools/
