@@ -46,5 +46,5 @@ Open an issue: https://github.com/Rafie-kun/luatools-moon/issues
 Want to remove everything? Run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/uninstall.sh | bash
 ```
