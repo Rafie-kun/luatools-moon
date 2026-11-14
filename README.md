@@ -16,6 +16,16 @@ curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/instal
 > removes it; pass `--keep-millennium` if you want to keep your Millennium
 > settings and themes folders for later.
 
+Handy flags, passed after `-- `:
+
+```bash
+# keep Millennium settings, don't start Steam at the end
+curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash -s -- --keep-millennium --nolaunch
+
+# slsteam-moon + Lumen only
+curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash -s -- --noplugin
+```
+
 ---
 
 Linux port of the `ltsteamplugin` plugin, built exclusively for the [slsteam-moon](https://github.com/swwayps/slsteam-moon) project. It serves as an integration layer that fetches manifest packs and installs them for slsteam-moon to consume natively on Linux.
