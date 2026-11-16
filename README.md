@@ -4,20 +4,26 @@
 
 Set up slsteam-moon, Lumen and the LuaTools plugin automatically with a single command.
 
-This fork — same installer, plus the store button fix and the Workshop writer:
+This fork — same installer, plus the store button fix, the Workshop writer, and
+the 64-bit (`steamrt64`) slsteam-moon from
+[Rafie-kun/slsteam-moon](https://github.com/Rafie-kun/slsteam-moon) instead of
+upstream's 32-bit v2.9:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash
 ```
 
 The original upstream line, if you'd rather have stock `swwayps` releases
-(their plugin release is still v2.9, so the store button stays missing there):
+(their plugin release is still v2.9, and their slsteam-moon is 32-bit only, so
+both the store button and the 64-bit build stay out):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/install.sh | bash
 ```
 
-Both accept the same flags; swap the URL to pick which releases you get.
+Both accept the same flags; swap the URL to pick which releases you get. The
+64-bit build needs a `steamrt64` Steam client — if yours is still
+`ubuntu12_32`, use the upstream line.
 
 > **Requirements:** Linux x86_64 and **native Steam** installed from your package
 > manager. Flatpak and Snap Steam are not supported.
