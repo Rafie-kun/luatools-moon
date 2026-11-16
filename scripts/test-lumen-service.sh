@@ -63,11 +63,16 @@ grep -q 'daemon-reload' "$CALLS" 2>/dev/null \
 	&& check "daemon reloaded" 0 || check "daemon reloaded" 1
 
 # --- opt-out ----------------------------------------------------------------
-rm -f "$UNIT"
+mkdir -p "$(dirname "$UNIT")"
+printf '[Unit]\nDescription=stale\n' >"$UNIT"
+rm -f "$CALLS"
 OPT_LUMEN_SERVICE=0
 install_lumen_service >/dev/null 2>&1
-[ -f "$UNIT" ] && check "--no-lumen-service writes nothing" 1 \
-	|| check "--no-lumen-service writes nothing" 0
+[ -f "$UNIT" ] && check "--no-lumen-service removes an old unit" 1 \
+	|| check "--no-lumen-service removes an old unit" 0
+grep -q 'disable --now lumen.service' "$CALLS" 2>/dev/null \
+	&& check "--no-lumen-service disables the old unit" 0 \
+	|| check "--no-lumen-service disables the old unit" 1
 
 # --- unit syntax, when systemd-analyze is around ----------------------------
 OPT_LUMEN_SERVICE=1
