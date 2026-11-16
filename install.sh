@@ -34,13 +34,13 @@ OPT_LUMEN_CHANNEL="stable"
 # ----------------------------------------------------------------------------
 # Repositories / release sources
 # ----------------------------------------------------------------------------
-SLS_REPO="swwayps/slsteam-moon"
+SLS_REPO="Rafie-kun/slsteam-moon"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
-# Lumen line: pick the newest release whose asset is the Lumen wrapper build
-# (named slsteam-moon-linux-<ver>-lumen.zip). Convention-based, so publishing a
-# new version (e.g. v2.5-lumen) needs no installer edit.
-SLS_ASSET_GLOB="^${SLS_ASSET_PREFIX}-.*-lumen\\.zip$"
+# This fork ships the 64-bit (steamrt64) port, so its assets no longer carry the
+# upstream "-lumen" suffix. Accept both names; the .sha256 sidecar is filtered
+# out by the .zip anchor.
+SLS_ASSET_GLOB="^${SLS_ASSET_PREFIX}-.*\\.zip$"
 
 PLUGIN_REPO="Rafie-kun/luatools-moon"
 PLUGIN_ASSET="luatools-linux.zip"
