@@ -1488,46 +1488,89 @@ cleanup_previous_install() {
 	fi
 
 	# --- Millennium framework ---------------------------------------------
-	# Lumen replaces Millennium. Crucially, Millennium forces the Steam
-	# webhelper onto --remote-debugging-pipe, which keeps the CEF port 8080
-	# CLOSED — and Lumen attaches via that port. So a pre-existing Millennium
-	# install would BLOCK Lumen. Remove the whole framework here (not just the
-	# old plugin dir handled above) so 8080 is free for Lumen.
-	# Keep it as user's request if arguement --keep-millennium is passed. 
-	if [ "${OPT_KEEP_MILLENNIUM:-0}" != 1 ]; then
-		remove_millennium_framework
-	fi
-	
+	# Millennium can stay. Its loader pushes the Steam webhelper onto
+	# --remote-debugging-pipe, which used to leave Lumen with no DevTools port
+	# to attach to; the marker file below opens that port anyway, so both can
+	# run side by side. Only touch Millennium when the user asks for it.
+	handle_millennium "${OPT_MILLENNIUM:-keep}"
+	ensure_cef_debug_file
 
 	log_success "$(L "Previous installation cleaned up" "Instalação anterior limpa")"
 }
 
+# Handle an existing Millennium install. Modes:
+#   keep    - leave it alone (the default: Lumen attaches over the CEF port we
+#             open below, so Millennium no longer has to be uninstalled)
+#   configs - drop Millennium's loader, keep ~/.config/millennium and
+#             ~/.local/share/millennium (what a bare --keep-millennium means)
+#   remove  - drop the loader and the data
+handle_millennium() {
+	case "${1:-keep}" in
+		keep)    return 0 ;;
+		configs) remove_millennium_framework 1 ;;
+		remove)  remove_millennium_framework 0 ;;
+		*)       return 0 ;;
+	esac
+}
+
+# Lumen attaches to Steam's CEF DevTools endpoint. Millennium points the
+# webhelper at --remote-debugging-pipe instead of a TCP port, so with both
+# installed there is nothing for Lumen to connect to. Valve's escape hatch is
+# this marker file: if it exists the webhelper opens the TCP endpoint as well
+# (its content is ignored). Creating it is what lets Millennium and Lumen
+# coexist, and it survives Steam updates because it lives next to steam.sh.
+ensure_cef_debug_file() {
+	local root created=0
+	for root in "$HOME/.steam/steam" "$HOME/.steam/debian-installation" \
+	            "$HOME/.local/share/Steam"; do
+		[ -d "$root" ] || continue
+		[ -f "$root/.cef-enable-remote-debugging" ] && continue
+		if : > "$root/.cef-enable-remote-debugging" 2>/dev/null; then
+			created=1
+		fi
+	done
+	if [ "$created" = 1 ]; then
+		log_info "$(L "Opened Steam's CEF debug port so Lumen can attach" \
+		             "Porta de debug do CEF da Steam aberta para o Lumen anexar")"
+	fi
+	return 0
+}
+
 # Remove an officially-installed Millennium framework (steambrew.app). Mirrors
-# uninstall.sh::uninstall_millennium. Millennium and Lumen are mutually
-# exclusive over Steam's single CEF DevTools endpoint, so Lumen requires
-# Millennium to be gone.
+# uninstall.sh::uninstall_millennium. $1 = 1 keeps the user's settings/data
+# folders only; 0 removes them too. Only reached through handle_millennium, so
+# a plain install leaves Millennium untouched.
 remove_millennium_framework() {
+	local keep_config="${1:-0}"
 	local sudo_cmd; sudo_cmd="$(sudo_prefix)"
 	local xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}/millennium"
 	local xdg_data="${XDG_DATA_HOME:-$HOME/.local/share}/millennium"
+	local legacy="$HOME/.millennium"
 	local steam_root="$HOME/.steam/steam"
 
-	# Anything to do? (user dirs or system dirs present, or injected symlinks)
-	if [ ! -d "$xdg_config" ] && [ ! -d "$xdg_data" ] \
-	   && [ ! -d /usr/lib/millennium ] && [ ! -d /usr/share/millennium ] \
-	   && [ ! -L "$steam_root/ubuntu12_64/libmillennium_hhx64.so" ]; then
-		return 0
+	local present=0
+	if [ -d /usr/lib/millennium ] || [ -d /usr/share/millennium ] \
+	   || [ -L "$steam_root/ubuntu12_64/libmillennium_hhx64.so" ] \
+	   || [ -L "$steam_root/ubuntu12_32/libmillennium_hhx32.so" ] \
+	   || [ -d "$steam_root/millennium" ]; then
+		present=1
 	fi
+	if [ "$keep_config" != 1 ] \
+	   && { [ -d "$xdg_config" ] || [ -d "$xdg_data" ] || [ -d "$legacy" ]; }; then
+		present=1
+	fi
+	[ "$present" = 1 ] || return 0
 
-	log_step "$(L "Removing existing Millennium (replaced by Lumen)" \
-	             "Removendo Millennium existente (substituído pelo Lumen)")"
+	log_step "$(L "Removing the Millennium loader" \
+	             "Removendo o loader do Millennium")"
 
 	# Symlinks Millennium drops into Steam's runtime dirs (point at its libs).
 	local link target
 	for link in \
 		"$steam_root/ubuntu12_32/libXtst.so.6" \
 		"$steam_root/ubuntu12_64/libXtst.so.6" \
-		"$steam_root/ubuntu12_64/libmillennium_hhx64.so"; do
+		"$steam_root/ubuntu12_64/libmillennium_hhx64.so" \
+		"$steam_root/ubuntu12_32/libmillennium_hhx32.so"; do
 		if [ -L "$link" ]; then
 			target="$(readlink "$link" 2>/dev/null || true)"
 			case "$target" in
@@ -1537,8 +1580,13 @@ remove_millennium_framework() {
 		fi
 	done
 
-	# User-side dirs (themes, plugins, config.json).
-	rm -rf "$xdg_config" "$xdg_data" 2>/dev/null || true
+	# User-side dirs (themes, plugins, config.json). Settings can be kept.
+	if [ "$keep_config" = 1 ]; then
+		log_info "$(L "Keeping Millennium settings in $xdg_config and $xdg_data" \
+		             "Mantendo as configurações do Millennium em $xdg_config e $xdg_data")"
+	else
+		rm -rf "$xdg_config" "$xdg_data" "$legacy" 2>/dev/null || true
+	fi
 
 	# Millennium also drops a dir inside Steam's own install (themes, etc.).
 	rm -rf "$steam_root/millennium" 2>/dev/null || true
@@ -1554,8 +1602,18 @@ remove_millennium_framework() {
 		fi
 	fi
 
-	log_success "$(L "Millennium removed (Steam re-extracts libXtst.so.6 on next launch)" \
-	             "Millennium removido (a Steam reextrai libXtst.so.6 no próximo início)")"
+	# Be loud if anything survived: the user asked for it to be gone, and
+	# Steam re-reads the leftovers on the next launch.
+	if [ -L "$steam_root/ubuntu12_64/libmillennium_hhx64.so" ] \
+	   || [ -L "$steam_root/ubuntu12_32/libmillennium_hhx32.so" ] \
+	   || [ -d /usr/lib/millennium ] || [ -d /usr/share/millennium ]; then
+		log_warn "$(L "Millennium is still installed. Close Steam, remove the leftovers above (the system dirs need sudo), then run this installer again if you want it gone." \
+		             "O Millennium ainda está instalado. Feche a Steam, remova o que sobrou acima (os diretórios de sistema precisam de sudo) e rode o instalador de novo se quiser removê-lo.")"
+		return 0
+	fi
+
+	log_success "$(L "Millennium loader removed (Steam re-extracts libXtst.so.6 on next launch)" \
+	             "Loader do Millennium removido (a Steam reextrai libXtst.so.6 no próximo início)")"
 }
 
 # ============================================================================
@@ -2970,8 +3028,12 @@ $(L "Options" "Opções"):
                   "Instala apenas o slsteam-moon + Lumen (pula o plugin LuaTools).")
   --nolaunch   $(L "Do not auto-start Steam at the end of install." \
                   "Não inicia a Steam automaticamente ao final da instalação.")
-  --keep-millennium $(L "Do not remove millennium's config/data (Old luatools plugin is still removed)." \
-                  "Não remover os dados/configurações do Millennium (o plugin luatools antigo ainda será removido).")
+  --keep-millennium[=configs|all]
+               $(L "What to do with an existing Millennium install. The default is to leave it running; 'configs' (the bare flag) removes its loader but keeps your settings and themes; 'all' is the same as the default." \
+                  "O que fazer com um Millennium já instalado. O padrão é deixá-lo funcionando; 'configs' (a flag sozinha) remove o loader mas mantém suas configurações e temas; 'all' é igual ao padrão.")
+  --remove-millennium
+               $(L "Remove Millennium completely (loader and settings). Not needed for Lumen any more." \
+                  "Remove o Millennium por completo (loader e configurações). Não é mais necessário para o Lumen.")
   --slsteam-channel stable|beta
                $(L "Select the slsteam-moon update channel (default: stable)." \
                   "Seleciona o canal de atualização do slsteam-moon (padrão: stable).")
@@ -3019,7 +3081,13 @@ do_autolaunch() {
 parse_args() {
 	OPT_NOPLUGIN=${LUATOOLS_MOON_NOPLUGIN:-0}
 	OPT_NOLAUNCH=${LUATOOLS_MOON_NOLAUNCH:-0}
-	OPT_KEEP_MILLENNIUM=${LUATOOLS_MOON_KEEP_MILLENNIUM:-0}
+	# Millennium: keep | configs | remove. The bare --keep-millennium maps to
+	# "configs" (as it always did); "all" means the new default, leave it alone.
+	OPT_MILLENNIUM="${LUATOOLS_MOON_MILLENNIUM:-keep}"
+	case "${LUATOOLS_MOON_KEEP_MILLENNIUM:-}" in
+		1|configs) OPT_MILLENNIUM=configs ;;
+		all|keep)  OPT_MILLENNIUM=keep ;;
+	esac
 	OPT_HELP=${LUATOOLS_MOON_HELP:-0}
 	OPT_SLS_CHANNEL="${LUATOOLS_MOON_SLS_CHANNEL:-stable}"
 	OPT_PLUGIN_CHANNEL="${LUATOOLS_MOON_PLUGIN_CHANNEL:-stable}"
@@ -3029,7 +3097,23 @@ parse_args() {
 		case "$1" in
 			--noplugin) OPT_NOPLUGIN=1 ;;
 			--nolaunch) OPT_NOLAUNCH=1 ;;
-			--keep-millennium) OPT_KEEP_MILLENNIUM=1 ;;
+			--keep-millennium)
+				# Optional value. Bare means "configs": drop the loader, keep
+				# the settings. "all" leaves Millennium completely untouched.
+				OPT_MILLENNIUM=configs
+				case "${2:-}" in
+					configs) OPT_MILLENNIUM=configs; shift ;;
+					all|keep) OPT_MILLENNIUM=keep; shift ;;
+				esac
+				;;
+			--keep-millennium=*)
+				case "${1#*=}" in
+					configs) OPT_MILLENNIUM=configs ;;
+					all|keep) OPT_MILLENNIUM=keep ;;
+					*) OPT_BAD_ARG="$1"; return 1 ;;
+				esac
+				;;
+			--remove-millennium) OPT_MILLENNIUM=remove ;;
 			--slsteam-channel|--plugin-channel|--lumen-channel)
 				local option="$1"
 				if [ "$#" -lt 2 ]; then

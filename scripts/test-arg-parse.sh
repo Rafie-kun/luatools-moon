@@ -57,6 +57,39 @@ check "invalid channel value: returns non-zero" "$r"
 parse_args --noplugin; check "--noplugin: returns 0" $?
 [ "$OPT_NOPLUGIN" = 1 ]; check "--noplugin: OPT_NOPLUGIN=1" $?
 
+# --- Millennium -------------------------------------------------------------
+# The installer no longer removes Millennium on its own; the bare flag keeps
+# its old meaning (drop the loader, keep the settings) and "all" opts out.
+parse_args; check "no args: returns 0 (Millennium)" $?
+[ "$OPT_MILLENNIUM" = keep ]; check "no args: Millennium is left alone" $?
+
+parse_args --keep-millennium
+check "--keep-millennium: returns 0" $?
+[ "$OPT_MILLENNIUM" = configs ]; check "--keep-millennium: bare flag means configs" $?
+
+parse_args --keep-millennium all
+check "--keep-millennium all: returns 0" $?
+[ "$OPT_MILLENNIUM" = keep ]; check "--keep-millennium all: Millennium stays" $?
+
+parse_args --keep-millennium=configs
+[ "$OPT_MILLENNIUM" = configs ]; check "--keep-millennium=configs: configs" $?
+
+parse_args --keep-millennium=all
+[ "$OPT_MILLENNIUM" = keep ]; check "--keep-millennium=all: Millennium stays" $?
+
+parse_args --keep-millennium --noplugin
+[ "$OPT_MILLENNIUM" = configs ]; check "--keep-millennium alone does not eat the next flag" $?
+[ "$OPT_NOPLUGIN" = 1 ];        check "--keep-millennium then --noplugin: both applied" $?
+
+if parse_args --keep-millennium=bogus; then r=1; else r=0; fi
+check "--keep-millennium=bogus: returns non-zero" "$r"
+
+parse_args --remove-millennium
+[ "$OPT_MILLENNIUM" = remove ]; check "--remove-millennium: full removal" $?
+
+parse_args --remove-millennium; parse_args
+[ "$OPT_MILLENNIUM" = keep ]; check "Millennium mode resets to keep" $?
+
 # --- --help / -h ------------------------------------------------------------
 parse_args --help; [ "$OPT_HELP" = 1 ]; check "--help: OPT_HELP=1" $?
 parse_args -h;     [ "$OPT_HELP" = 1 ]; check "-h: OPT_HELP=1" $?
