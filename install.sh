@@ -1355,6 +1355,15 @@ stop_steam() {
 stop_lumen() {
 	local lumen_bin="$HOME/.local/share/Lumen/lumen"
 
+	# With the user service installed, killing Lumen just makes systemd start it
+	# again a few seconds later — right in the middle of the install, still on
+	# the old files. Stop the unit instead; install_lumen_service starts a fresh
+	# one once the new binary and lua/ are in place.
+	if command -v systemctl >/dev/null 2>&1 \
+	   && systemctl --user is-enabled --quiet lumen.service >/dev/null 2>&1; then
+		systemctl --user stop lumen.service >/dev/null 2>&1 || true
+	fi
+
 	if ! pgrep -f "$lumen_bin" >/dev/null 2>&1; then
 		log_success "$(L "No running Lumen process detected" "Nenhum processo do Lumen em execução")"
 		return 0
