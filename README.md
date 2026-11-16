@@ -34,6 +34,14 @@ Both accept the same flags; swap the URL to pick which releases you get. The
 > loader and settings stay where they are. If you'd rather drop just the
 > loader, `--keep-millennium` removes it and keeps your settings and themes;
 > `--remove-millennium` takes everything.
+>
+> **Keeping up with Steam.** The slsteam-moon payload is checked against this
+> fork's releases when Steam launches (at most once every six hours, sha256
+> verified, old files kept under `~/.local/share/SLSsteam/backup/`). Export
+> `SLSM_NO_AUTOUPDATE=1` to turn that off. Lumen runs as a systemd user service
+> (`lumen.service`) so it is already up when Steam starts, whichever launcher
+> you used — that used to take a few Steam restarts. `--no-lumen-service` goes
+> back to wrapper-only; Lumen's log is at `~/.local/share/Lumen/lumen.log`.
 
 Handy flags, passed after `-- `:
 
