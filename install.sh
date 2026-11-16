@@ -2149,6 +2149,67 @@ install_lumen() {
 	log_success "$(L "Lumen installed" "Lumen instalado")"
 }
 
+# Keep Lumen running for the whole desktop session.
+#
+# The Steam wrapper starts the sidecar itself, but only for launches that go
+# through that wrapper. Steam started by another launcher (or relaunched by its
+# own updater) came up with no sidecar and no moon button, and getting it back
+# meant closing and reopening Steam - which is the "it takes a few restarts
+# before Lumen shows up" complaint. A user service starts Lumen at login and
+# brings it back if it dies; Lumen already waits for Steam by itself and has its
+# own singleton lock, so the wrapper and the service cannot both run one.
+install_lumen_service() {
+	if [ "${OPT_LUMEN_SERVICE:-1}" != 1 ]; then
+		log_info "$(L "Skipping the Lumen user service (--no-lumen-service)" \
+		             "Ignorando o serviço de usuário do Lumen (--no-lumen-service)")"
+		return 0
+	fi
+	if ! command -v systemctl >/dev/null 2>&1; then
+		log_info "$(L "systemd not found: the Steam wrapper will start Lumen instead." \
+		             "systemd não encontrado: o wrapper da Steam vai iniciar o Lumen.")"
+		return 0
+	fi
+
+	local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+	local unit="$unit_dir/lumen.service"
+	if ! mkdir -p "$unit_dir" 2>/dev/null; then
+		log_warn "$(L "Could not create $unit_dir; the Steam wrapper will start Lumen instead." \
+		             "Não foi possível criar $unit_dir; o wrapper da Steam vai iniciar o Lumen.")"
+		return 0
+	fi
+
+	# Restart=always also covers the normal idle exit (Lumen stops after ten
+	# minutes without Steam), so a service restart just puts it back to waiting
+	# for Steam. The burst limit keeps a genuinely broken build from spinning.
+	cat >"$unit" <<'EOF'
+[Unit]
+Description=Lumen (LuaTools sidecar)
+Documentation=https://github.com/Rafie-kun/lumen
+StartLimitIntervalSec=300
+StartLimitBurst=20
+
+[Service]
+Type=simple
+Environment=LUMEN_LUA_DIR=%h/.local/share/Lumen/lua
+Environment=LUMEN_BACKEND_DIR=%h/.local/share/Lumen/luatools/backend
+ExecStart=%h/.local/share/Lumen/lumen
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+
+	systemctl --user daemon-reload >/dev/null 2>&1 || true
+	if systemctl --user enable --now lumen.service >/dev/null 2>&1; then
+		log_success "$(L "Lumen user service installed and started" \
+		                "Serviço de usuário do Lumen instalado e iniciado")"
+	else
+		log_warn "$(L "Could not start the Lumen user service now; the Steam wrapper will still launch Lumen." \
+		             "Não foi possível iniciar o serviço do Lumen agora; o wrapper da Steam ainda inicia o Lumen.")"
+	fi
+}
+
 # ============================================================================
 # Step: LuaTools plugin (this repo)
 # ============================================================================
@@ -3078,6 +3139,9 @@ $(L "Options" "Opções"):
                   "Instala apenas o slsteam-moon + Lumen (pula o plugin LuaTools).")
   --nolaunch   $(L "Do not auto-start Steam at the end of install." \
                   "Não inicia a Steam automaticamente ao final da instalação.")
+  --no-lumen-service
+               $(L "Do not install the Lumen user service. It starts Lumen at login so it is already there when Steam comes up, whichever launcher started it; with this flag only the Steam wrapper starts Lumen." \
+                  "Não instala o serviço de usuário do Lumen. Ele inicia o Lumen no login para ele já estar lá quando a Steam abrir, qualquer que seja o launcher; com esta flag só o wrapper da Steam inicia o Lumen.")
   --keep-millennium[=configs|all]
                $(L "What to do with an existing Millennium install. The default is to leave it running; 'configs' (the bare flag) removes its loader but keeps your settings and themes; 'all' is the same as the default." \
                   "O que fazer com um Millennium já instalado. O padrão é deixá-lo funcionando; 'configs' (a flag sozinha) remove o loader mas mantém suas configurações e temas; 'all' é igual ao padrão.")
@@ -3143,10 +3207,16 @@ parse_args() {
 	OPT_PLUGIN_CHANNEL="${LUATOOLS_MOON_PLUGIN_CHANNEL:-stable}"
 	OPT_LUMEN_CHANNEL="${LUATOOLS_MOON_LUMEN_CHANNEL:-stable}"
 	OPT_BAD_ARG=""
+	# Keep Lumen running for the whole session by default (see
+	# install_lumen_service). --no-lumen-service drops back to "the wrapper
+	# starts it", which only covers Steam launches that go through the wrapper.
+	OPT_LUMEN_SERVICE="${LUATOOLS_MOON_LUMEN_SERVICE:-1}"
 	while [ "$#" -gt 0 ]; do
 		case "$1" in
 			--noplugin) OPT_NOPLUGIN=1 ;;
 			--nolaunch) OPT_NOLAUNCH=1 ;;
+			--no-lumen-service) OPT_LUMEN_SERVICE=0 ;;
+			--lumen-service)    OPT_LUMEN_SERVICE=1 ;;
 			--keep-millennium)
 				# Optional value. Bare means "configs": drop the loader, keep
 				# the settings. "all" leaves Millennium completely untouched.
@@ -3241,6 +3311,7 @@ main() {
 
 	print_section "$(L "Installing Lumen" "Instalando Lumen")"
 	install_lumen
+	install_lumen_service
 
 	if [ "$OPT_NOPLUGIN" = 1 ]; then
 		print_section "$(L "LuaTools plugin (skipped)" "Plugin LuaTools (ignorado)")"

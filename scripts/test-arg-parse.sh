@@ -57,6 +57,22 @@ check "invalid channel value: returns non-zero" "$r"
 parse_args --noplugin; check "--noplugin: returns 0" $?
 [ "$OPT_NOPLUGIN" = 1 ]; check "--noplugin: OPT_NOPLUGIN=1" $?
 
+# --- Lumen user service -----------------------------------------------------
+# On by default (Lumen should already be up when Steam starts, no matter which
+# launcher started it); the flag is there for people who want the wrapper to
+# own the sidecar.
+parse_args; check "no args: returns 0 (Lumen service)" $?
+[ "$OPT_LUMEN_SERVICE" = 1 ]; check "no args: Lumen service is installed" $?
+
+parse_args --no-lumen-service; check "--no-lumen-service: returns 0" $?
+[ "$OPT_LUMEN_SERVICE" = 0 ]; check "--no-lumen-service: OPT_LUMEN_SERVICE=0" $?
+
+parse_args --no-lumen-service; parse_args
+[ "$OPT_LUMEN_SERVICE" = 1 ]; check "Lumen service setting resets to on" $?
+
+parse_args --lumen-service
+[ "$OPT_LUMEN_SERVICE" = 1 ]; check "--lumen-service: explicitly on" $?
+
 # --- Millennium -------------------------------------------------------------
 # The installer no longer removes Millennium on its own; the bare flag keeps
 # its old meaning (drop the loader, keep the settings) and "all" opts out.

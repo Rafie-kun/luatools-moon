@@ -1488,7 +1488,7 @@ uninstall_luatools_plugin() {
 # ============================================================================
 # Step: Lumen (millennium-less bridge) + its install dir
 # ============================================================================
-# The sidecar outlives Steam by ~45s and, until it exits, re-runs
+# The sidecar outlives Steam by up to ten minutes and, until it exits, re-runs
 # ensure-desktop-coverage.sh --user every 3s (lumen/lua/deskcover.lua). Deleting
 # its directory does not stop it, so it has to be killed BEFORE we restore
 # anything — otherwise a tick can re-patch the entries we just put back, the same
@@ -1519,6 +1519,17 @@ stop_lumen() {
 }
 
 uninstall_lumen() {
+	# Disable the user service first: it carries Restart=always, so leaving it
+	# enabled would bring Lumen back while its directory is being deleted and
+	# then keep the unit failing.
+	local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl --user disable --now lumen.service >/dev/null 2>&1 || true
+	fi
+	rm -f "$unit_dir/lumen.service" 2>/dev/null || true
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl --user daemon-reload >/dev/null 2>&1 || true
+	fi
 	stop_lumen
 	if [ -d "$HOME/.local/share/Lumen" ]; then
 		log_step "$(L "Removing ~/.local/share/Lumen" "Removendo ~/.local/share/Lumen")"
