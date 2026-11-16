@@ -2168,7 +2168,22 @@ install_lumen() {
 # brings it back if it dies; Lumen already waits for Steam by itself and has its
 # own singleton lock, so the wrapper and the service cannot both run one.
 install_lumen_service() {
+	local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+	local unit="$unit_dir/lumen.service"
+
 	if [ "${OPT_LUMEN_SERVICE:-1}" != 1 ]; then
+		# The flag means "the wrapper owns the sidecar", which also has to undo a
+		# unit an earlier install left behind - otherwise the wrapper sees it
+		# enabled and keeps deferring to systemd.
+		if command -v systemctl >/dev/null 2>&1; then
+			systemctl --user disable --now lumen.service >/dev/null 2>&1 || true
+		fi
+		if [ -f "$unit" ]; then
+			rm -f "$unit" 2>/dev/null || true
+			if command -v systemctl >/dev/null 2>&1; then
+				systemctl --user daemon-reload >/dev/null 2>&1 || true
+			fi
+		fi
 		log_info "$(L "Skipping the Lumen user service (--no-lumen-service)" \
 		             "Ignorando o serviço de usuário do Lumen (--no-lumen-service)")"
 		return 0
@@ -2179,8 +2194,6 @@ install_lumen_service() {
 		return 0
 	fi
 
-	local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-	local unit="$unit_dir/lumen.service"
 	if ! mkdir -p "$unit_dir" 2>/dev/null; then
 		log_warn "$(L "Could not create $unit_dir; the Steam wrapper will start Lumen instead." \
 		             "Não foi possível criar $unit_dir; o wrapper da Steam vai iniciar o Lumen.")"
