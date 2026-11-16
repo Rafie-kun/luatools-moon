@@ -22,15 +22,17 @@ Both accept the same flags; swap the URL to pick which releases you get.
 > **Requirements:** Linux x86_64 and **native Steam** installed from your package
 > manager. Flatpak and Snap Steam are not supported.
 >
-> **Coming from Millennium?** Its loader has to go, because Millennium keeps
-> Steam's debug port and Lumen needs that port to attach at all. The installer
-> removes it; pass `--keep-millennium` if you want to keep your Millennium
-> settings and themes folders for later.
+> **Already using Millennium?** You can keep it. Lumen needs Steam's CEF
+> debug port, which Millennium keeps shut, so the installer drops
+> `~/.steam/steam/.cef-enable-remote-debugging` to open it — Millennium's
+> loader and settings stay where they are. If you'd rather drop just the
+> loader, `--keep-millennium` removes it and keeps your settings and themes;
+> `--remove-millennium` takes everything.
 
 Handy flags, passed after `-- `:
 
 ```bash
-# keep Millennium settings, don't start Steam at the end
+# drop the Millennium loader but keep its settings, and don't start Steam
 curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash -s -- --keep-millennium --nolaunch
 
 # slsteam-moon + Lumen only
