@@ -11,10 +11,12 @@ curl -fsSL https://raw.githubusercontent.com/swwayps/luatools-moon/main/install.
 > **Requirements:** Linux x86_64 and **native Steam** installed from your package
 > manager. Flatpak and Snap Steam are not supported.
 >
-> **Coming from Millennium?** Its loader has to go, because Millennium keeps
-> Steam's debug port and Lumen needs that port to attach at all. The installer
-> removes it; pass `--keep-millennium` if you want to keep your Millennium
-> settings and themes folders for later.
+> **Already using Millennium?** You can keep it. Lumen needs Steam's CEF
+> debug port, which Millennium keeps shut, so the installer drops
+> `~/.steam/steam/.cef-enable-remote-debugging` to open it — Millennium's
+> loader and settings stay where they are. If you'd rather drop just the
+> loader, `--keep-millennium` removes it and keeps your settings and themes;
+> `--remove-millennium` takes everything.
 
 ---
 
