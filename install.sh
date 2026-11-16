@@ -2027,8 +2027,24 @@ download_resolved_asset() {
 # Step: slsteam-moon (the release already bundles setup.sh + bin/ + tools/).
 # We just download, extract, and run setup.sh install — which also kills Steam.
 # ============================================================================
+# The release this fork installs is built for steamrt64. A client that was
+# rolled back to ubuntu12_32 would load the 32-bit upstream build instead, so
+# say so before downloading something Steam is going to ignore.
+warn_if_steam_is_32bit() {
+	local root
+	for root in "$HOME/.steam/steam" "$HOME/.steam/debian-installation" \
+	            "$HOME/.local/share/Steam"; do
+		[ -f "$root/steamrt64/steamclient.so" ] && return 0
+	done
+	log_warn "$(L "No steamrt64 client found. The slsteam-moon in this fork is 64-bit only; if your Steam still runs ubuntu12_32, use upstream's 32-bit build instead." \
+	             "Nenhum cliente steamrt64 encontrado. O slsteam-moon deste fork é só 64-bit; se a sua Steam ainda roda ubuntu12_32, use o build 32-bit do upstream.")"
+	return 0
+}
+
 install_slsteam_moon() {
 	local tmp zip extract_root setup setup_path rc
+
+	warn_if_steam_is_32bit
 
 	log_info "$(L "Resolving the latest slsteam-moon (Lumen) release" \
 	             "Buscando a última release do slsteam-moon (Lumen)")"
