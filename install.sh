@@ -34,8 +34,11 @@ OPT_LUMEN_CHANNEL="stable"
 # ----------------------------------------------------------------------------
 # Repositories / release sources
 # ----------------------------------------------------------------------------
-SLS_REPO="${SLS_REPO:-ogb4n/slssteam-moon-x64}"
-SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-Rafie-kun/slsteam-moon}"
+# This fork publishes slsteam-moon-linux-<ver>.zip from its own releases, so it
+# is the primary source. ogb4n/slssteam-moon-x64 is the port the fork derives
+# from; it is kept as a secondary source only.
+SLS_REPO="${SLS_REPO:-Rafie-kun/slsteam-moon}"
+SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-ogb4n/slssteam-moon-x64}"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
 # The x64 port publishes slssteam-moon-x64-<ver>.zip; this fork publishes
@@ -55,10 +58,6 @@ LUMEN_DIR="$HOME/.local/share/Lumen"            # binary + lua/ + luatools/
 # Stable release fallback. The manifest is small and mutable; every archive URL
 # inside it is pinned to the mirror commit that introduced those exact bytes.
 RELEASE_MIRROR_MANIFEST="${RELEASE_MIRROR_MANIFEST:-https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/manifest.json}"
-# Our mirror carries the x64 fork builds; upstream's is the emergency copy for
-# plugin/Lumen (it never has an slsteam entry we would accept). The installer
-# derives the accepted asset URL prefix from whichever manifest answered.
-RELEASE_MIRROR_MANIFEST_FALLBACK="${RELEASE_MIRROR_MANIFEST_FALLBACK-https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json}"
 
 # CloudRedirect hook (the patched 32-bit cloud_redirect.so) lives in its own
 # repo now; we fetch the prebuilt hook straight from its raw branch.
@@ -1744,11 +1743,7 @@ github_release_asset_info() {
 mirror_release_asset_info() {
 	local key="$1" meta manifest base
 	manifest="$RELEASE_MIRROR_MANIFEST"
-	meta="$(api_get "$manifest")" || {
-		manifest="${RELEASE_MIRROR_MANIFEST_FALLBACK:-}"
-		[ -n "$manifest" ] || return 2
-		meta="$(api_get "$manifest")" || return 2
-	}
+	meta="$(api_get "$manifest")" || return 2
 	# Accept only archives pinned into the manifest's own repository. Deriving
 	# the prefix keeps this exact check when the manifest moves (and still
 	# rejects a rewritten branch, because the ref segment must be a commit).
