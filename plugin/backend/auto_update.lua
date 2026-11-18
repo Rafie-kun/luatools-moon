@@ -21,12 +21,30 @@ auto_update.ALLOWED_UPDATE_HOSTS = {
     ["luatools.vercel.app"] = true,
 }
 
+-- The release mirror describes exactly the plugin below, so it is only
+-- consulted when the configured update source is that same plugin. Archive
+-- URLs inside it must stay pinned to a commit of this repository.
+auto_update.MIRROR_REPO = "swwayps/jsdelivr"
+auto_update.MIRROR_SOURCE = {
+    owner = "swwayps",
+    repo = "luatools-moon",
+    asset_name = "luatools-linux.zip",
+}
 auto_update.MIRROR_MANIFEST_URL =
-    "https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/manifest.json"
--- Emergency copy for the plugin archive. Ours is preferred, upstream's stays
--- readable when the fork's mirror is temporarily unavailable.
-auto_update.MIRROR_MANIFEST_FALLBACK =
-    "https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json"
+    "https://cdn.jsdelivr.net/gh/" .. auto_update.MIRROR_REPO .. "@main/manifest.json"
+auto_update.MIRROR_ASSET_PREFIX =
+    "https://cdn.jsdelivr.net/gh/" .. auto_update.MIRROR_REPO .. "@"
+
+-- A manifest archive URL must point inside the mirror repository at a specific
+-- commit: a branch or `latest` URL can be repointed after the digest was
+-- published.
+function auto_update.is_pinned_mirror_url(url)
+    if type(url) ~= "string" then return false end
+    local prefix = auto_update.MIRROR_ASSET_PREFIX
+    if url:sub(1, #prefix) ~= prefix then return false end
+    local commit = url:sub(#prefix + 1):match("^([0-9a-f]+)/")
+    return commit ~= nil and #commit >= 7
+end
 
 -- An archive URL is only trusted when it is commit-pinned under one of the two
 -- mirror repositories. (Lua patterns have no alternation, so the owner is
@@ -67,9 +85,10 @@ function auto_update.check_for_updates_now()
         if gh_cfg.tag and gh_cfg.tag ~= "" and not tag then
             return { success = false, error = "Update source tag is invalid" }
         end
-        mirror_allowed = (owner .. "/" .. repo == "Rafie-kun/luatools-moon"
-            or (owner == "swwayps" and repo == "luatools-moon"))
-            and asset_name == "luatools-linux.zip" and tag == nil
+        local mirror_source = auto_update.MIRROR_SOURCE
+        mirror_allowed = owner == mirror_source.owner
+            and repo == mirror_source.repo
+            and asset_name == mirror_source.asset_name and tag == nil
 
     end
 
@@ -143,6 +162,39 @@ function auto_update.check_for_updates_now()
         end
     end
 
+    -- Release assets are mirrored under commit-pinned jsDelivr URLs. This tiny
+    -- manifest remains reachable when GitHub's API or asset CDN is unavailable.
+    local mirror_entry
+    if mirror_allowed then
+        local mirror_resp = http_client.get(auto_update.MIRROR_MANIFEST_URL, {
+            headers = { ["Accept"] = "application/json", ["User-Agent"] = "LuaTools-Updater" },
+            timeout = 10
+        })
+        if mirror_resp and mirror_resp.status == 200 and mirror_resp.body then
+            local mirror = utils.decode_json(mirror_resp.body)
+            local entry = mirror and mirror.schema == 1
+                and mirror.components and mirror.components.plugin or nil
+            if entry and guard.tag_name(entry.tag)
+                and auto_update.is_pinned_mirror_url(entry.url)
+                and type(entry.sha256) == "string"
+                and entry.sha256:match("^[0-9a-f]+$")
+                and #entry.sha256 == 64 then
+                mirror_entry = entry
+            end
+        end
+    end
+
+    if (latest_version == "" or zip_url == "") and mirror_entry then
+        latest_version = mirror_entry.tag
+        zip_url = mirror_entry.url
+        expected_sha = mirror_entry.sha256
+        if tag_prefix ~= "" and latest_version:sub(1, #tag_prefix) == tag_prefix then
+            latest_version = latest_version:sub(#tag_prefix + 1)
+        end
+    elseif mirror_entry and mirror_entry.tag == github_tag then
+        fallback_url = mirror_entry.url
+        fallback_sha = mirror_entry.sha256
+    end
     -- Retain the historical redirect only when GitHub answered with a valid
     -- tag but neither release source provided the named archive.
     if zip_url == "" and guard.tag_name(github_tag) then
