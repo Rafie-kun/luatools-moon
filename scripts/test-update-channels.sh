@@ -21,6 +21,17 @@ source "$INSTALL_SH" >/dev/null 2>&1
   [ "$LUMEN_BETA_PATH" = "dist/lumen-linux.zip" ]; }
 check "each component has a future-compatible beta artifact path" $?
 
+# The x64 port lives in its own repo; this fork keeps a release that always
+# resolves, so an unreachable port repo must not break installs.
+{ [ "$SLS_REPO" = "ogb4n/slssteam-moon-x64" ] &&
+  [ "$SLS_REPO_FALLBACK" = "Rafie-kun/slsteam-moon" ]; }
+check "the x64 port repo is preferred, with this fork as fallback" $?
+
+{ printf '%s\n' "slssteam-moon-x64-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
+  printf '%s\n' "slsteam-moon-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
+  ! printf '%s\n' "slsteam-moon-linux-3.2.zip.sha256" | grep -Eq "$SLS_ASSET_GLOB"; }
+check "release asset glob accepts both payload names" $?
+
 MOCK_API_FAIL=0
 MOCK_API_JSON='{"sha":"0123456789abcdef","size":4321,"download_url":"https://raw.example/lumen.zip"}'
 API_URL_FILE="$(mktemp)"
