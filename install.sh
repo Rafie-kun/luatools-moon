@@ -2057,8 +2057,11 @@ install_slsteam_moon() {
 
 	log_info "$(L "Resolving the latest slsteam-moon (Lumen) release" \
 	             "Buscando a última release do slsteam-moon (Lumen)")"
+	# No mirror for the port repo: the jsDelivr mirror still carries upstream's
+	# 32-bit v2.9, which would silently replace the steamrt64 payload. Only the
+	# fallback repo may use the mirror.
 	resolve_component_asset "$OPT_SLS_CHANNEL" "$SLS_REPO" "$SLS_BETA_PATH" \
-		"$SLS_ASSET_GLOB" any slsteam-moon || rc=$?
+		"$SLS_ASSET_GLOB" any "" || rc=$?
 	# The x64 port repo can be private or have no release yet. Our fork builds
 	# the same payload and always has one, so installs keep working.
 	if [ "${rc:-0}" -ne 0 ] && [ -n "${SLS_REPO_FALLBACK:-}" ]; then
