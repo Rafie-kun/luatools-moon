@@ -34,8 +34,11 @@ OPT_LUMEN_CHANNEL="stable"
 # ----------------------------------------------------------------------------
 # Repositories / release sources
 # ----------------------------------------------------------------------------
-SLS_REPO="${SLS_REPO:-ogb4n/slssteam-moon-x64}"
-SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-Rafie-kun/slsteam-moon}"
+# This fork publishes slsteam-moon-linux-<ver>.zip from its own releases, so it
+# is the primary source. ogb4n/slssteam-moon-x64 is the port the fork derives
+# from; it is kept as a secondary source only.
+SLS_REPO="${SLS_REPO:-Rafie-kun/slsteam-moon}"
+SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-ogb4n/slssteam-moon-x64}"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
 # The x64 port publishes slssteam-moon-x64-<ver>.zip; this fork publishes
@@ -54,7 +57,7 @@ LUMEN_DIR="$HOME/.local/share/Lumen"            # binary + lua/ + luatools/
 
 # Stable release fallback. The manifest is small and mutable; every archive URL
 # inside it is pinned to the mirror commit that introduced those exact bytes.
-RELEASE_MIRROR_MANIFEST="https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json"
+RELEASE_MIRROR_MANIFEST="${RELEASE_MIRROR_MANIFEST:-https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json}"
 
 # CloudRedirect hook (the patched 32-bit cloud_redirect.so) lives in its own
 # repo now; we fetch the prebuilt hook straight from its raw branch.
@@ -1740,9 +1743,13 @@ github_release_asset_info() {
 mirror_release_asset_info() {
 	local key="$1" meta
 	meta="$(api_get "$RELEASE_MIRROR_MANIFEST")" || return 2
-	printf '%s' "$meta" | jq -c --arg key "$key" '
+	# The archive must be pinned to a commit of the same jsDelivr repository that
+	# served the manifest, so overriding RELEASE_MIRROR_MANIFEST keeps the strict
+	# prefix check instead of loosening it.
+	local prefix="${RELEASE_MIRROR_MANIFEST%@*}@"
+	printf '%s' "$meta" | jq -c --arg key "$key" --arg prefix "$prefix" '
 		if .schema == 1 then (.components[$key] // {}) else {} end
-		| if ((.url // "") | startswith("https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@"))
+		| if ((.url // "") | startswith($prefix))
 		     and ((.sha256 // "") | test("^[0-9a-f]{64}$"))
 		  then . else {} end' 2>/dev/null || printf '{}'
 }
