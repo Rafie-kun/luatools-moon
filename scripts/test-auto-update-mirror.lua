@@ -57,7 +57,7 @@ end
 package.preload["plugin_utils"] = function()
   return {
     read_json = function()
-      return { github = { owner = "swwayps", repo = "luatools-moon", asset_name = "luatools-linux.zip" } }
+      return { github = { owner = "Rafie-kun", repo = "luatools-moon", asset_name = "luatools-linux.zip" } }
     end,
     decode_json = function(body)
       if body == "github-fixture" then
@@ -66,7 +66,7 @@ package.preload["plugin_utils"] = function()
           assets = {{
             name = "luatools-linux.zip",
             browser_download_url =
-              "https://github.com/swwayps/luatools-moon/releases/download/v2.9/luatools-linux.zip",
+              "https://github.com/Rafie-kun/luatools-moon/releases/download/v2.9/luatools-linux.zip",
           }},
         }
       end
@@ -79,7 +79,7 @@ package.preload["plugin_utils"] = function()
               id = 29,
               size = 290,
               sha256 = string.rep("a", 64),
-              url = "https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@"
+              url = "https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@"
                 .. "0123456789012345678901234567890123456789"
                 .. "/releases/plugin/v2.9/hash/luatools-linux.zip",
             },
@@ -126,7 +126,7 @@ check("GitHub outage falls back to the jsDelivr manifest", result.success == tru
 check("mirror exposes the new v2.9 release", result.message
   and result.message:find("2.9", 1, true) ~= nil)
 check("updater downloads from the commit-pinned mirror URL", executed
-  and executed:find("cdn.jsdelivr.net/gh/swwayps/jsdelivr@", 1, true) ~= nil)
+  and executed:find("cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@", 1, true) ~= nil)
 check("mirror download is checked against the manifest digest", executed
   and executed:find("sha256sum", 1, true) ~= nil
   and executed:find(string.rep("a", 64), 1, true) ~= nil)
@@ -138,8 +138,8 @@ executed = nil
 result = auto_update.check_for_updates_now()
 check("GitHub asset download keeps the mirror as a transfer fallback",
   result.success == true and executed
-    and executed:find("github.com/swwayps/luatools%-moon/releases", 1) ~= nil
-    and executed:find("cdn.jsdelivr.net/gh/swwayps/jsdelivr@", 1, true) ~= nil
+    and executed:find("github.com/Rafie%-kun/luatools%-moon/releases", 1) ~= nil
+    and executed:find("cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@", 1, true) ~= nil
     and executed:find(" || ", 1, true) ~= nil)
 check("transfer fallback verifies the mirrored archive",
   executed and executed:find("sha256sum", 1, true) ~= nil
