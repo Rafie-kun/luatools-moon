@@ -24,9 +24,9 @@ auto_update.ALLOWED_UPDATE_HOSTS = {
 -- The release mirror describes exactly the plugin below, so it is only
 -- consulted when the configured update source is that same plugin. Archive
 -- URLs inside it must stay pinned to a commit of this repository.
-auto_update.MIRROR_REPO = "swwayps/jsdelivr"
+auto_update.MIRROR_REPO = "Rafie-kun/jsdelivr"
 auto_update.MIRROR_SOURCE = {
-    owner = "swwayps",
+    owner = "Rafie-kun",
     repo = "luatools-moon",
     asset_name = "luatools-linux.zip",
 }

@@ -21,11 +21,11 @@ source "$INSTALL_SH" >/dev/null 2>&1
   [ "$LUMEN_BETA_PATH" = "dist/lumen-linux.zip" ]; }
 check "each component has a future-compatible beta artifact path" $?
 
-# The x64 port lives in its own repo; this fork keeps a release that always
-# resolves, so an unreachable port repo must not break installs.
-{ [ "$SLS_REPO" = "ogb4n/slssteam-moon-x64" ] &&
-  [ "$SLS_REPO_FALLBACK" = "Rafie-kun/slsteam-moon" ]; }
-check "the x64 port repo is preferred, with this fork as fallback" $?
+# The fork publishes the payload, so it is the only source probed by default:
+# ogb4n/slssteam-moon-x64 answers 404 and must not cost a request per install.
+{ [ "$SLS_REPO" = "Rafie-kun/slsteam-moon" ] &&
+  [ -z "$SLS_REPO_FALLBACK" ]; }
+check "the fork is the default source and no dead fallback is probed" $?
 
 { printf '%s\n' "slssteam-moon-x64-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
   printf '%s\n' "slsteam-moon-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
