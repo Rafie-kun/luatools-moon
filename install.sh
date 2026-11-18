@@ -36,9 +36,10 @@ OPT_LUMEN_CHANNEL="stable"
 # ----------------------------------------------------------------------------
 # This fork publishes slsteam-moon-linux-<ver>.zip from its own releases, so it
 # is the primary source. ogb4n/slssteam-moon-x64 is the port the fork derives
-# from; it is kept as a secondary source only.
+# from, but it answers 404, so it is not probed unless asked for: set
+# SLS_REPO_FALLBACK=ogb4n/slssteam-moon-x64 to make it a secondary source.
 SLS_REPO="${SLS_REPO:-Rafie-kun/slsteam-moon}"
-SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-ogb4n/slssteam-moon-x64}"
+SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-}"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
 # The x64 port publishes slssteam-moon-x64-<ver>.zip; this fork publishes
@@ -57,7 +58,7 @@ LUMEN_DIR="$HOME/.local/share/Lumen"            # binary + lua/ + luatools/
 
 # Stable release fallback. The manifest is small and mutable; every archive URL
 # inside it is pinned to the mirror commit that introduced those exact bytes.
-RELEASE_MIRROR_MANIFEST="${RELEASE_MIRROR_MANIFEST:-https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json}"
+RELEASE_MIRROR_MANIFEST="${RELEASE_MIRROR_MANIFEST:-https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/manifest.json}"
 
 # CloudRedirect hook (the patched 32-bit cloud_redirect.so) lives in its own
 # repo now; we fetch the prebuilt hook straight from its raw branch.
