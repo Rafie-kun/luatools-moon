@@ -34,13 +34,13 @@ OPT_LUMEN_CHANNEL="stable"
 # ----------------------------------------------------------------------------
 # Repositories / release sources
 # ----------------------------------------------------------------------------
-SLS_REPO="Rafie-kun/slsteam-moon"
+SLS_REPO="${SLS_REPO:-ogb4n/slssteam-moon-x64}"
+SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-Rafie-kun/slsteam-moon}"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
-# This fork ships the 64-bit (steamrt64) port, so its assets no longer carry the
-# upstream "-lumen" suffix. Accept both names; the .sha256 sidecar is filtered
-# out by the .zip anchor.
-SLS_ASSET_GLOB="^${SLS_ASSET_PREFIX}-.*\\.zip$"
+# The x64 port publishes slssteam-moon-x64-<ver>.zip; this fork publishes
+# slsteam-moon-linux-<ver>.zip. Accept both, and ignore the .sha256 sidecar.
+SLS_ASSET_GLOB="^(slsteam-moon-linux|slssteam-moon-x64-linux)-.*\\.zip$"
 
 PLUGIN_REPO="Rafie-kun/luatools-moon"
 PLUGIN_ASSET="luatools-linux.zip"
@@ -2059,6 +2059,15 @@ install_slsteam_moon() {
 	             "Buscando a última release do slsteam-moon (Lumen)")"
 	resolve_component_asset "$OPT_SLS_CHANNEL" "$SLS_REPO" "$SLS_BETA_PATH" \
 		"$SLS_ASSET_GLOB" any slsteam-moon || rc=$?
+	# The x64 port repo can be private or have no release yet. Our fork builds
+	# the same payload and always has one, so installs keep working.
+	if [ "${rc:-0}" -ne 0 ] && [ -n "${SLS_REPO_FALLBACK:-}" ]; then
+		log_warn "$(L "No release from ${SLS_REPO}; using ${SLS_REPO_FALLBACK}" \
+		             "Sem release em ${SLS_REPO}; usando ${SLS_REPO_FALLBACK}")"
+		rc=0
+		resolve_component_asset "$OPT_SLS_CHANNEL" "$SLS_REPO_FALLBACK" "$SLS_BETA_PATH" \
+			"$SLS_ASSET_GLOB" any slsteam-moon || rc=$?
+	fi
 	if [ "${rc:-0}" -eq 2 ]; then fail "$(forge_unreachable_msg)"; fi
 	if [ "${rc:-0}" -ne 0 ]; then
 		fail "$(L "Could not find a slsteam-moon (Lumen) release asset." \
