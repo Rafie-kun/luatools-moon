@@ -50,6 +50,8 @@ jobs:
       - name: Verify artifact
         run: |
           test -f dist/luatools-linux.zip
+          test -f dist/luatools-linux.zip.sha256
+          ( cd dist && sha256sum -c luatools-linux.zip.sha256 )
           unzip -l dist/luatools-linux.zip | head -20
 
       - name: Publish release
@@ -57,10 +59,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ steps.tag.outputs.name }}"
+          # The installer verifies the asset against <asset>.sha256, so both files
+          # have to be published together.
+          assets=(dist/luatools-linux.zip dist/luatools-linux.zip.sha256)
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" dist/luatools-linux.zip --clobber
+            gh release upload "$tag" "${assets[@]}" --clobber
           else
-            gh release create "$tag" dist/luatools-linux.zip \
+            gh release create "$tag" "${assets[@]}" \
               --title "$tag" \
               --generate-notes
           fi
