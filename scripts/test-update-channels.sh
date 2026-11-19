@@ -32,6 +32,14 @@ check "the x64 port repo is preferred, with this fork as fallback" $?
   ! printf '%s\n' "slsteam-moon-linux-3.2.zip.sha256" | grep -Eq "$SLS_ASSET_GLOB"; }
 check "release asset glob accepts both payload names" $?
 
+# The installer refuses a release whose payload the client cannot load.
+ELF_TMP="$(mktemp)"
+printf '\177ELF\001\001\001 fake 32-bit object' >"$ELF_TMP"
+{ [ "$(elf_class "$ELF_TMP")" = 1 ] && [ "$(elf_class /bin/true)" = 2 ] &&
+  [ -z "$(elf_class /etc/hostname)" ]; }
+check "elf_class tells 32-bit, 64-bit and non-ELF apart" $?
+rm -f "$ELF_TMP"
+
 MOCK_API_FAIL=0
 MOCK_API_JSON='{"sha":"0123456789abcdef","size":4321,"download_url":"https://raw.example/lumen.zip"}'
 API_URL_FILE="$(mktemp)"
@@ -60,6 +68,15 @@ check "missing beta artifact is unavailable" "$r"
 latest_release_asset_url() { printf 'https://stable.example/component.zip'; }
 any_release_asset_url() { printf 'https://stable.example/component-any.zip'; }
 release_asset_info() { printf '{"tag":"v9","id":99,"size":9000}'; }
+# resolve_component_asset goes through github_release_asset_info; mock that too,
+# so the fallback and any-release cases exercise the real selector.
+github_release_asset_info() {
+	if [ "${3:-latest}" = "any" ]; then
+		printf '{"url":"https://stable.example/component-any.zip","tag":"v9","id":99,"size":9000}'
+	else
+		printf '{"url":"https://stable.example/component.zip","tag":"v9","id":99,"size":9000}'
+	fi
+}
 log_warn() { :; }
 
 MOCK_API_JSON='{"sha":"beta-sha","size":123,"download_url":"https://beta.example/component.zip"}'
@@ -83,6 +100,34 @@ resolve_component_asset stable repo dist/component.zip '^component\\.zip$' any; 
   [ "$RESOLVED_ASSET_URL" = https://stable.example/component-any.zip ] &&
   [ "$(printf '%s' "$RESOLVED_ASSET_INFO" | jq -r '.channel')" = stable ]; }
 check "Stable selection skips beta and supports any-release resolution" $?
+
+# ── mirror manifest: ours first, upstream only as the emergency copy ─────────
+DIGEST="$(printf 'a%.0s' {1..64})"
+MIRROR_OURS='{"schema":1,"components":{"lumen":{"tag":"v2.12","url":"https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@deadbeef/releases/lumen/v2.12/'"$DIGEST"'/lumen-linux.zip","sha256":"'"$DIGEST"'"}}}'
+MIRROR_UPSTREAM='{"schema":1,"components":{"lumen":{"tag":"v2.9","url":"https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@deadbeef/releases/lumen/v2.9/'"$DIGEST"'/lumen-linux.zip","sha256":"'"$DIGEST"'"}}}'
+MIRROR_OURS_FAIL=0
+api_get() {
+	case "$1" in
+		*Rafie-kun/jsdelivr*)
+			[ "$MIRROR_OURS_FAIL" = 1 ] && return 1
+			printf '%s' "$MIRROR_OURS" ;;
+		*swwayps/jsdelivr*) printf '%s' "$MIRROR_UPSTREAM" ;;
+		*) return 1 ;;
+	esac
+}
+info="$(mirror_release_asset_info lumen)"
+check "mirror reads our fork's manifest first" \
+	"$([ "$(printf '%s' "$info" | jq -r '.tag')" = v2.12 ]; echo $?)"
+MIRROR_OURS_FAIL=1
+info="$(mirror_release_asset_info lumen)"
+check "an unavailable mirror falls back to upstream" \
+	"$([ "$(printf '%s' "$info" | jq -r '.tag')" = v2.9 ]; echo $?)"
+MIRROR_OURS_FAIL=0
+# An entry pointing at another repository is not ours to trust.
+MIRROR_OURS='{"schema":1,"components":{"lumen":{"tag":"v9","url":"https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@deadbeef/x.zip","sha256":"'"$DIGEST"'"}}}'
+info="$(mirror_release_asset_info lumen)"
+check "mirror rejects an archive from another repository" \
+	"$([ -z "$(printf '%s' "$info" | jq -r '.url // empty')" ]; echo $?)"
 
 echo ""
 if [ "$failures" -eq 0 ]; then echo "ALL PASS"; exit 0; fi
