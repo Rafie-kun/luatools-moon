@@ -5,7 +5,7 @@
 #
 # The service is what makes Lumen be there on the first Steam launch instead of
 # after a few restarts, so the parts worth pinning are that it starts the right
-# binary with the right dirs, survives a crash (Restart=always), and is actually
+# binary with the right dirs, survives a crash (Restart=on-failure), and is actually
 # enabled. systemctl is stubbed: this must not touch the real user manager.
 
 set -u
@@ -53,8 +53,11 @@ grep -q '^Environment=LUMEN_LUA_DIR=%h/.local/share/Lumen/lua$' "$UNIT" \
 	&& check "lua dir passed through" 0 || check "lua dir passed through" 1
 grep -q '^Environment=LUMEN_BACKEND_DIR=%h/.local/share/Lumen/luatools/backend$' "$UNIT" \
 	&& check "backend dir passed through" 0 || check "backend dir passed through" 1
-grep -q '^Restart=always$' "$UNIT" \
+grep -q '^Restart=on-failure$' "$UNIT" \
 	&& check "restarts after a crash" 0 || check "restarts after a crash" 1
+grep -q '^Environment=LUMEN_STEAM_GRACE=120$' "$UNIT" \
+	&& check "idle exit is short enough to not linger" 0 \
+	|| check "idle exit is short enough to not linger" 1
 grep -q '^WantedBy=default.target$' "$UNIT" \
 	&& check "starts at login" 0 || check "starts at login" 1
 grep -q 'enable --now lumen.service' "$CALLS" 2>/dev/null \

@@ -67,7 +67,7 @@ url="$(any_release_asset_url repo '^slsteam-moon-linux-.*-lumen\.zip$')"; rc=$?
 
 GH_LUMEN_MATCH='{"tag_name":"v2.9","assets":[{"id":29,"name":"lumen-linux.zip","created_at":"2026-09-02T00:00:00Z","updated_at":"2026-09-02T00:00:00Z","size":290,"browser_download_url":"https://github.example/lumen-linux.zip"}]}'
 GH_LUMEN_TEMP='{"tag_name":"v2.9","assets":[{"id":29,"name":"lumen-linux-uploading.zip.tmp","created_at":"2026-09-02T00:00:00Z","updated_at":"2026-09-02T00:00:00Z","size":290,"browser_download_url":"https://github.example/temp.zip"}]}'
-MIRROR_JSON='{"schema":1,"components":{"lumen":{"tag":"v2.8","id":28,"asset_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-01T00:00:00Z","size":280,"name":"lumen-linux.zip","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","url":"https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@0123456789012345678901234567890123456789/releases/lumen/v2.8/hash/lumen-linux.zip"}}}'
+MIRROR_JSON='{"schema":1,"components":{"lumen":{"tag":"v2.8","id":28,"asset_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-01T00:00:00Z","size":280,"name":"lumen-linux.zip","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","url":"https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@0123456789012345678901234567890123456789/releases/lumen/v2.8/hash/lumen-linux.zip"}}}'
 
 MOCK_GITHUB_FAIL=0
 MOCK_GITHUB_JSON="$GH_LUMEN_MATCH"
@@ -108,9 +108,20 @@ rc=0
 resolve_component_asset stable swwayps/lumen dist/lumen-linux.zip \
 	'^lumen-linux\.zip$' latest lumen || rc=$?
 { [ "$rc" -eq 0 ] &&
-  [ "$RESOLVED_ASSET_URL" = "https://github.example/lumen-linux.zip" ] &&
-  [ "${RESOLVED_FALLBACK_URL:-}" = "$(printf '%s' "$MIRROR_JSON" | jq -r '.components.lumen.url')" ]; }
-check "stable: GitHub primary keeps jsDelivr as download fallback" $?
+  [ "$RESOLVED_ASSET_URL" = "$(printf '%s' "$MIRROR_JSON" | jq -r '.components.lumen.url')" ]; }
+check "stable: mirror is read before the GitHub API" $?
+
+# No mirror entry -> the GitHub release is the source.
+MOCK_MIRROR_FAIL=0
+MIRROR_JSON_SAVED="$MIRROR_JSON"
+MIRROR_JSON='{"schema":1,"components":{}}'
+rc=0
+resolve_component_asset stable swwayps/lumen dist/lumen-linux.zip \
+	'^lumen-linux\.zip$' latest lumen || rc=$?
+{ [ "$rc" -eq 0 ] &&
+  [ "$RESOLVED_ASSET_URL" = "https://github.example/lumen-linux.zip" ]; }
+check "stable: GitHub answers when the mirror has no entry" $?
+MIRROR_JSON="$MIRROR_JSON_SAVED"
 
 # --- transfer failover -----------------------------------------------------
 

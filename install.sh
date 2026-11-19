@@ -54,7 +54,11 @@ LUMEN_DIR="$HOME/.local/share/Lumen"            # binary + lua/ + luatools/
 
 # Stable release fallback. The manifest is small and mutable; every archive URL
 # inside it is pinned to the mirror commit that introduced those exact bytes.
-RELEASE_MIRROR_MANIFEST="https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json"
+RELEASE_MIRROR_MANIFEST="${RELEASE_MIRROR_MANIFEST:-https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/manifest.json}"
+# Our mirror carries the x64 fork builds; upstream's is the emergency copy for
+# plugin/Lumen (it never has an slsteam entry we would accept). The installer
+# derives the accepted asset URL prefix from whichever manifest answered.
+RELEASE_MIRROR_MANIFEST_FALLBACK="${RELEASE_MIRROR_MANIFEST_FALLBACK-https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json}"
 
 # CloudRedirect hook (the patched 32-bit cloud_redirect.so) lives in its own
 # repo now; we fetch the prebuilt hook straight from its raw branch.
@@ -1738,11 +1742,20 @@ github_release_asset_info() {
 # constrained so a malformed manifest cannot turn the installer into a generic
 # downloader. Returns 2 when the manifest itself is unavailable.
 mirror_release_asset_info() {
-	local key="$1" meta
-	meta="$(api_get "$RELEASE_MIRROR_MANIFEST")" || return 2
-	printf '%s' "$meta" | jq -c --arg key "$key" '
+	local key="$1" meta manifest base
+	manifest="$RELEASE_MIRROR_MANIFEST"
+	meta="$(api_get "$manifest")" || {
+		manifest="${RELEASE_MIRROR_MANIFEST_FALLBACK:-}"
+		[ -n "$manifest" ] || return 2
+		meta="$(api_get "$manifest")" || return 2
+	}
+	# Accept only archives pinned into the manifest's own repository. Deriving
+	# the prefix keeps this exact check when the manifest moves (and still
+	# rejects a rewritten branch, because the ref segment must be a commit).
+	base="${manifest%%@*}@"
+	printf '%s' "$meta" | jq -c --arg key "$key" --arg base "$base" '
 		if .schema == 1 then (.components[$key] // {}) else {} end
-		| if ((.url // "") | startswith("https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@"))
+		| if ((.url // "") | startswith($base))
 		     and ((.sha256 // "") | test("^[0-9a-f]{64}$"))
 		  then . else {} end' 2>/dev/null || printf '{}'
 }
@@ -1774,7 +1787,9 @@ resolve_component_asset() {
 	local channel="$1" repo="$2" beta_path="$3" stable_glob="$4"
 	local stable_mode="${5:-latest}" mirror_key="${6:-}"
 	local beta_info="" github_info="{}" mirror_info="{}" url=""
-	local github_rc=0 mirror_rc=0
+	# No mirror configured reads as "mirror unavailable", so a GitHub outage
+	# still reports 2 (unreachable) instead of 3 (no such asset).
+	local github_rc=0 mirror_rc=2
 	RESOLVED_ASSET_URL=""
 	RESOLVED_ASSET_INFO="{}"
 	RESOLVED_FALLBACK_URL=""
@@ -1794,11 +1809,22 @@ resolve_component_asset() {
 		                 "O Beta não está disponível para ${repo}; usando Stable.")"
 	fi
 
-	github_info="$(github_release_asset_info "$repo" "$stable_glob" "$stable_mode")" \
-		|| github_rc=$?
+	# The fork mirror answers from jsDelivr (no GitHub rate limit) and is synced
+	# every few minutes. Read it first for the components that have an entry; the
+	# GitHub release stays the source when the mirror has nothing.
 	if [ -n "$mirror_key" ]; then
 		mirror_info="$(mirror_release_asset_info "$mirror_key")" || mirror_rc=$?
+		url="$(printf '%s' "$mirror_info" | jq -r '.url // empty' 2>/dev/null)"
+		if [ -n "$url" ]; then
+			RESOLVED_ASSET_URL="$url"
+			RESOLVED_ASSET_INFO="$(printf '%s' "$mirror_info" |
+				jq -c 'del(.url, .sha256_url) + {channel:"stable", source:"jsdelivr"}' 2>/dev/null)"
+			return 0
+		fi
 	fi
+
+	github_info="$(github_release_asset_info "$repo" "$stable_glob" "$stable_mode")" \
+		|| github_rc=$?
 
 	url="$(printf '%s' "$github_info" | jq -r '.url // empty' 2>/dev/null)"
 	if [ -n "$url" ]; then
@@ -1811,14 +1837,6 @@ resolve_component_asset() {
 			RESOLVED_FALLBACK_INFO="$(printf '%s' "$mirror_info" |
 				jq -c 'del(.url, .sha256_url) + {channel:"stable", source:"jsdelivr"}' 2>/dev/null)"
 		fi
-		return 0
-	fi
-
-	url="$(printf '%s' "$mirror_info" | jq -r '.url // empty' 2>/dev/null)"
-	if [ -n "$url" ]; then
-		RESOLVED_ASSET_URL="$url"
-		RESOLVED_ASSET_INFO="$(printf '%s' "$mirror_info" |
-			jq -c 'del(.url, .sha256_url) + {channel:"stable", source:"jsdelivr"}' 2>/dev/null)"
 		return 0
 	fi
 
@@ -2050,6 +2068,30 @@ warn_if_steam_is_32bit() {
 	return 0
 }
 
+# ELF class of a file: 2 = 64-bit, 1 = 32-bit, empty when it isn't an ELF.
+elf_class() {
+	[ -f "$1" ] || return 1
+	case "$(od -An -tx1 -j4 -N1 "$1" 2>/dev/null | tr -d '[:space:]')" in
+		01) printf 1 ;;
+		02) printf 2 ;;
+		*) return 1 ;;
+	esac
+}
+
+# Architecture of the Steam client we are about to inject into.
+client_elf_class() {
+	local root
+	for root in "$HOME/.steam/steam" "$HOME/.steam/debian-installation" \
+	            "$HOME/.local/share/Steam"; do
+		[ -f "$root/steamrt64/steamclient.so" ] && { printf 2; return 0; }
+	done
+	for root in "$HOME/.steam/steam" "$HOME/.steam/debian-installation" \
+	            "$HOME/.local/share/Steam"; do
+		[ -f "$root/ubuntu12_32/steamclient.so" ] && { printf 1; return 0; }
+	done
+	return 1
+}
+
 install_slsteam_moon() {
 	local tmp zip extract_root setup setup_path rc
 
@@ -2069,7 +2111,7 @@ install_slsteam_moon() {
 		             "Sem release em ${SLS_REPO}; usando ${SLS_REPO_FALLBACK}")"
 		rc=0
 		resolve_component_asset "$OPT_SLS_CHANNEL" "$SLS_REPO_FALLBACK" "$SLS_BETA_PATH" \
-			"$SLS_ASSET_GLOB" any slsteam-moon || rc=$?
+			"$SLS_ASSET_GLOB" any "" || rc=$?
 	fi
 	if [ "${rc:-0}" -eq 2 ]; then fail "$(forge_unreachable_msg)"; fi
 	if [ "${rc:-0}" -ne 0 ]; then
@@ -2093,6 +2135,19 @@ install_slsteam_moon() {
 	[ -n "$setup" ] || fail "$(L "setup.sh not found in the release archive." \
 	                            "setup.sh não encontrado no pacote da release.")"
 	extract_root="$(dirname "$setup")"
+
+	# A release built for the other architecture cannot load: ld.so drops the
+	# auditor and Steam starts without the plugin (or looks stuck). Stop here
+	# instead of installing it, so a stale mirror can never downgrade a client.
+	payload_class="$(elf_class "$extract_root/bin/SLSsteam.so" || true)"
+	client_class="$(client_elf_class || true)"
+	if [ -n "$payload_class" ] && [ -n "$client_class" ] \
+	   && [ "$payload_class" != "$client_class" ]; then
+		if [ "$payload_class" = 2 ]; then payload_arch=64-bit; else payload_arch=32-bit; fi
+		if [ "$client_class" = 2 ]; then client_arch=64-bit; else client_arch=32-bit; fi
+		fail "$(L "This release is ${payload_arch} but your Steam client is ${client_arch}. The loader would ignore it; nothing was installed." \
+		          "Esta release é ${payload_arch} mas o seu cliente Steam é ${client_arch}. O loader iria ignorá-la; nada foi instalado.")"
+	fi
 
 	chmod +x "$setup" 2>/dev/null || true
 	log_info "$(L "Running slsteam-moon setup (this will stop Steam)" \
@@ -2229,9 +2284,11 @@ install_lumen_service() {
 		return 0
 	fi
 
-	# Restart=always also covers the normal idle exit (Lumen stops after ten
-	# minutes without Steam), so a service restart just puts it back to waiting
-	# for Steam. The burst limit keeps a genuinely broken build from spinning.
+	# Restart=on-failure, not always: Lumen exits cleanly once Steam has been
+	# gone past its grace window, and restarting it just to sit idle is what made
+	# a killed Steam leave a stray Lumen behind. The wrapper starts the unit again
+	# on the next launch (it nudges an inactive unit), so nothing is lost.
+	# The burst limit keeps a genuinely broken build from spinning.
 	cat >"$unit" <<'EOF'
 [Unit]
 Description=Lumen (LuaTools sidecar)
@@ -2243,8 +2300,9 @@ StartLimitBurst=20
 Type=simple
 Environment=LUMEN_LUA_DIR=%h/.local/share/Lumen/lua
 Environment=LUMEN_BACKEND_DIR=%h/.local/share/Lumen/luatools/backend
+Environment=LUMEN_STEAM_GRACE=120
 ExecStart=%h/.local/share/Lumen/lumen
-Restart=always
+Restart=on-failure
 RestartSec=5
 
 [Install]
