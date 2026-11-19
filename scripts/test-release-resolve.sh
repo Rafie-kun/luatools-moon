@@ -32,8 +32,10 @@ api_get() { [ "${MOCK_FAIL:-0}" = 1 ] && return 1; printf '%s' "$MOCK_JSON"; }
 
 LATEST_JSON_MATCH='{"assets":[{"name":"luatools-linux.zip","browser_download_url":"https://cb/luatools-linux.zip"}]}'
 LATEST_JSON_NOMATCH='{"assets":[{"name":"other.zip","browser_download_url":"https://cb/other.zip"}]}'
-ANY_JSON_MATCH='[{"assets":[{"name":"slsteam-moon-linux-2.6-lumen.zip","browser_download_url":"https://cb/slsteam-moon-linux-2.6-lumen.zip"}]}]'
-ANY_JSON_NOMATCH='[{"assets":[{"name":"slsteam-moon-linux-2.6.zip","browser_download_url":"https://cb/slsteam-moon-linux-2.6.zip"}]}]'
+# The fork publishes slsteam-moon-linux-<ver>.zip; the 32-bit era used a
+# "-lumen" suffix, which must no longer be required.
+ANY_JSON_MATCH='[{"assets":[{"name":"slsteam-moon-linux-3.1.zip","browser_download_url":"https://cb/slsteam-moon-linux-3.1.zip"}]}]'
+ANY_JSON_NOMATCH='[{"assets":[{"name":"slsteam-moon-linux-3.1.zip.sha256","browser_download_url":"https://cb/slsteam-moon-linux-3.1.zip.sha256"}]}]'
 
 # --- latest_release_asset_url -----------------------------------------------
 
@@ -52,16 +54,18 @@ url="$(latest_release_asset_url repo '^luatools-linux\.zip$')"; rc=$?
 # --- any_release_asset_url --------------------------------------------------
 
 MOCK_FAIL=1
-url="$(any_release_asset_url repo '^slsteam-moon-linux-.*-lumen\.zip$')"; rc=$?
+SLS_GLOB="$SLS_ASSET_GLOB"
+
+url="$(any_release_asset_url repo "$SLS_GLOB")"; rc=$?
 { [ "$rc" -eq 2 ] && [ -z "$url" ]; }; check "any: fetch failure -> rc 2, empty url" $?
 
 MOCK_FAIL=0; MOCK_JSON="$ANY_JSON_MATCH"
-url="$(any_release_asset_url repo '^slsteam-moon-linux-.*-lumen\.zip$')"; rc=$?
-{ [ "$rc" -eq 0 ] && [ "$url" = "https://cb/slsteam-moon-linux-2.6-lumen.zip" ]; }; check "any: ok + match -> rc 0, url" $?
+url="$(any_release_asset_url repo "$SLS_GLOB")"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$url" = "https://cb/slsteam-moon-linux-3.1.zip" ]; }; check "any: ok + match -> rc 0, url" $?
 
 MOCK_FAIL=0; MOCK_JSON="$ANY_JSON_NOMATCH"
-url="$(any_release_asset_url repo '^slsteam-moon-linux-.*-lumen\.zip$')"; rc=$?
-{ [ "$rc" -eq 0 ] && [ -z "$url" ]; }; check "any: ok + no match -> rc 0, empty url" $?
+url="$(any_release_asset_url repo "$SLS_GLOB")"; rc=$?
+{ [ "$rc" -eq 0 ] && [ -z "$url" ]; }; check "any: sha256 sidecar is not treated as the asset" $?
 
 # --- stable GitHub -> jsDelivr mirror resolution ---------------------------
 
@@ -108,20 +112,9 @@ rc=0
 resolve_component_asset stable swwayps/lumen dist/lumen-linux.zip \
 	'^lumen-linux\.zip$' latest lumen || rc=$?
 { [ "$rc" -eq 0 ] &&
-  [ "$RESOLVED_ASSET_URL" = "$(printf '%s' "$MIRROR_JSON" | jq -r '.components.lumen.url')" ]; }
-check "stable: mirror is read before the GitHub API" $?
-
-# No mirror entry -> the GitHub release is the source.
-MOCK_MIRROR_FAIL=0
-MIRROR_JSON_SAVED="$MIRROR_JSON"
-MIRROR_JSON='{"schema":1,"components":{}}'
-rc=0
-resolve_component_asset stable swwayps/lumen dist/lumen-linux.zip \
-	'^lumen-linux\.zip$' latest lumen || rc=$?
-{ [ "$rc" -eq 0 ] &&
-  [ "$RESOLVED_ASSET_URL" = "https://github.example/lumen-linux.zip" ]; }
-check "stable: GitHub answers when the mirror has no entry" $?
-MIRROR_JSON="$MIRROR_JSON_SAVED"
+  [ "$RESOLVED_ASSET_URL" = "https://github.example/lumen-linux.zip" ] &&
+  [ "${RESOLVED_FALLBACK_URL:-}" = "$(printf '%s' "$MIRROR_JSON" | jq -r '.components.lumen.url')" ]; }
+check "stable: GitHub primary keeps jsDelivr as download fallback" $?
 
 # --- transfer failover -----------------------------------------------------
 

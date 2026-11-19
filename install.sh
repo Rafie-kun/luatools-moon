@@ -34,8 +34,12 @@ OPT_LUMEN_CHANNEL="stable"
 # ----------------------------------------------------------------------------
 # Repositories / release sources
 # ----------------------------------------------------------------------------
-SLS_REPO="${SLS_REPO:-ogb4n/slssteam-moon-x64}"
-SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-Rafie-kun/slsteam-moon}"
+# This fork publishes slsteam-moon-linux-<ver>.zip from its own releases, so it
+# is the primary source. ogb4n/slssteam-moon-x64 is the port the fork derives
+# from, but it answers 404, so it is not probed unless asked for: set
+# SLS_REPO_FALLBACK=ogb4n/slssteam-moon-x64 to make it a secondary source.
+SLS_REPO="${SLS_REPO:-Rafie-kun/slsteam-moon}"
+SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-}"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
 # The x64 port publishes slssteam-moon-x64-<ver>.zip; this fork publishes
@@ -55,10 +59,6 @@ LUMEN_DIR="$HOME/.local/share/Lumen"            # binary + lua/ + luatools/
 # Stable release fallback. The manifest is small and mutable; every archive URL
 # inside it is pinned to the mirror commit that introduced those exact bytes.
 RELEASE_MIRROR_MANIFEST="${RELEASE_MIRROR_MANIFEST:-https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/manifest.json}"
-# Our mirror carries the x64 fork builds; upstream's is the emergency copy for
-# plugin/Lumen (it never has an slsteam entry we would accept). The installer
-# derives the accepted asset URL prefix from whichever manifest answered.
-RELEASE_MIRROR_MANIFEST_FALLBACK="${RELEASE_MIRROR_MANIFEST_FALLBACK-https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@main/manifest.json}"
 
 # CloudRedirect hook (the patched 32-bit cloud_redirect.so) lives in its own
 # repo now; we fetch the prebuilt hook straight from its raw branch.
@@ -1742,20 +1742,16 @@ github_release_asset_info() {
 # constrained so a malformed manifest cannot turn the installer into a generic
 # downloader. Returns 2 when the manifest itself is unavailable.
 mirror_release_asset_info() {
-	local key="$1" meta manifest base
-	manifest="$RELEASE_MIRROR_MANIFEST"
-	meta="$(api_get "$manifest")" || {
-		manifest="${RELEASE_MIRROR_MANIFEST_FALLBACK:-}"
-		[ -n "$manifest" ] || return 2
-		meta="$(api_get "$manifest")" || return 2
-	}
-	# Accept only archives pinned into the manifest's own repository. Deriving
-	# the prefix keeps this exact check when the manifest moves (and still
-	# rejects a rewritten branch, because the ref segment must be a commit).
-	base="${manifest%%@*}@"
-	printf '%s' "$meta" | jq -c --arg key "$key" --arg base "$base" '
+	local key="$1" meta
+	meta="$(api_get "$RELEASE_MIRROR_MANIFEST")" || return 2
+	# The archive must be pinned to a commit of the same jsDelivr repository that
+	# served the manifest, so overriding RELEASE_MIRROR_MANIFEST keeps the strict
+	# prefix check instead of loosening it.
+	local prefix="${RELEASE_MIRROR_MANIFEST%@*}@"
+	printf '%s' "$meta" | jq -c --arg key "$key" --arg prefix "$prefix" '
 		if .schema == 1 then (.components[$key] // {}) else {} end
-		| if ((.url // "") | startswith($base))
+		| if ((.url // "") | startswith($prefix))
+		     and (((.url // "") | ltrimstr($prefix)) | test("^[0-9a-f]{7,}/"))
 		     and ((.sha256 // "") | test("^[0-9a-f]{64}$"))
 		  then . else {} end' 2>/dev/null || printf '{}'
 }
@@ -1787,8 +1783,8 @@ resolve_component_asset() {
 	local channel="$1" repo="$2" beta_path="$3" stable_glob="$4"
 	local stable_mode="${5:-latest}" mirror_key="${6:-}"
 	local beta_info="" github_info="{}" mirror_info="{}" url=""
-	# No mirror configured reads as "mirror unavailable", so a GitHub outage
-	# still reports 2 (unreachable) instead of 3 (no such asset).
+	# With no mirror configured, a GitHub outage must still read as
+	# "unreachable" (2) instead of "no such asset" (3).
 	local github_rc=0 mirror_rc=2
 	RESOLVED_ASSET_URL=""
 	RESOLVED_ASSET_INFO="{}"
@@ -1809,22 +1805,11 @@ resolve_component_asset() {
 		                 "O Beta não está disponível para ${repo}; usando Stable.")"
 	fi
 
-	# The fork mirror answers from jsDelivr (no GitHub rate limit) and is synced
-	# every few minutes. Read it first for the components that have an entry; the
-	# GitHub release stays the source when the mirror has nothing.
-	if [ -n "$mirror_key" ]; then
-		mirror_info="$(mirror_release_asset_info "$mirror_key")" || mirror_rc=$?
-		url="$(printf '%s' "$mirror_info" | jq -r '.url // empty' 2>/dev/null)"
-		if [ -n "$url" ]; then
-			RESOLVED_ASSET_URL="$url"
-			RESOLVED_ASSET_INFO="$(printf '%s' "$mirror_info" |
-				jq -c 'del(.url, .sha256_url) + {channel:"stable", source:"jsdelivr"}' 2>/dev/null)"
-			return 0
-		fi
-	fi
-
 	github_info="$(github_release_asset_info "$repo" "$stable_glob" "$stable_mode")" \
 		|| github_rc=$?
+	if [ -n "$mirror_key" ]; then
+		mirror_info="$(mirror_release_asset_info "$mirror_key")" || mirror_rc=$?
+	fi
 
 	url="$(printf '%s' "$github_info" | jq -r '.url // empty' 2>/dev/null)"
 	if [ -n "$url" ]; then
@@ -1837,6 +1822,14 @@ resolve_component_asset() {
 			RESOLVED_FALLBACK_INFO="$(printf '%s' "$mirror_info" |
 				jq -c 'del(.url, .sha256_url) + {channel:"stable", source:"jsdelivr"}' 2>/dev/null)"
 		fi
+		return 0
+	fi
+
+	url="$(printf '%s' "$mirror_info" | jq -r '.url // empty' 2>/dev/null)"
+	if [ -n "$url" ]; then
+		RESOLVED_ASSET_URL="$url"
+		RESOLVED_ASSET_INFO="$(printf '%s' "$mirror_info" |
+			jq -c 'del(.url, .sha256_url) + {channel:"stable", source:"jsdelivr"}' 2>/dev/null)"
 		return 0
 	fi
 

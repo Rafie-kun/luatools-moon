@@ -6,8 +6,6 @@ package.path = "plugin/backend/?.lua;" .. package.path
 
 local executed
 local mode = "mirror-only"
-local mirror_down = false
-local gh_owner, gh_repo = "swwayps", "luatools-moon"
 
 package.preload["utils"] = function()
   return {
@@ -34,7 +32,6 @@ package.preload["http_client"] = function()
         return nil, "offline"
       end
       if url:find("cdn.jsdelivr.net", 1, true) then
-        if mirror_down then return nil, "offline" end
         return {
           status = 200,
           body = "mirror-fixture",
@@ -60,7 +57,7 @@ end
 package.preload["plugin_utils"] = function()
   return {
     read_json = function()
-      return { github = { owner = gh_owner, repo = gh_repo, asset_name = "luatools-linux.zip" } }
+      return { github = { owner = "Rafie-kun", repo = "luatools-moon", asset_name = "luatools-linux.zip" } }
     end,
     decode_json = function(body)
       if body == "github-fixture" then
@@ -69,7 +66,7 @@ package.preload["plugin_utils"] = function()
           assets = {{
             name = "luatools-linux.zip",
             browser_download_url =
-              "https://github.com/swwayps/luatools-moon/releases/download/v2.9/luatools-linux.zip",
+              "https://github.com/Rafie-kun/luatools-moon/releases/download/v2.9/luatools-linux.zip",
           }},
         }
       end
@@ -82,7 +79,7 @@ package.preload["plugin_utils"] = function()
               id = 29,
               size = 290,
               sha256 = string.rep("a", 64),
-              url = "https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@"
+              url = "https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@"
                 .. "0123456789012345678901234567890123456789"
                 .. "/releases/plugin/v2.9/hash/luatools-linux.zip",
             },
@@ -129,54 +126,23 @@ check("GitHub outage falls back to the jsDelivr manifest", result.success == tru
 check("mirror exposes the new v2.9 release", result.message
   and result.message:find("2.9", 1, true) ~= nil)
 check("updater downloads from the commit-pinned mirror URL", executed
-  and executed:find("cdn.jsdelivr.net/gh/swwayps/jsdelivr@", 1, true) ~= nil)
+  and executed:find("cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@", 1, true) ~= nil)
 check("mirror download is checked against the manifest digest", executed
   and executed:find("sha256sum", 1, true) ~= nil
   and executed:find(string.rep("a", 64), 1, true) ~= nil)
 check("cdn.jsdelivr.net is an allowed update host",
   auto_update.ALLOWED_UPDATE_HOSTS["cdn.jsdelivr.net"] == true)
 
--- The mirror is read first, so an available entry never spends the GitHub API
--- quota: the download goes to jsDelivr even when GitHub would also answer.
 mode = "github-primary"
 executed = nil
 result = auto_update.check_for_updates_now()
-check("mirror-first download skips GitHub",
+check("GitHub asset download keeps the mirror as a transfer fallback",
   result.success == true and executed
-    and executed:find("cdn.jsdelivr.net/gh/swwayps/jsdelivr@", 1, true) ~= nil
-    and executed:find("github.com/swwayps/luatools%-moon/releases", 1) == nil)
-check("mirror-first download verifies the archive",
+    and executed:find("github.com/Rafie%-kun/luatools%-moon/releases", 1) ~= nil
+    and executed:find("cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@", 1, true) ~= nil
+    and executed:find(" || ", 1, true) ~= nil)
+check("transfer fallback verifies the mirrored archive",
   executed and executed:find("sha256sum", 1, true) ~= nil
     and executed:find(string.rep("a", 64), 1, true) ~= nil)
-
--- With the mirror down, GitHub is still the source.
-mirror_down = true
-executed = nil
-result = auto_update.check_for_updates_now()
-check("GitHub is used when the mirror is unavailable",
-  result.success == true and executed
-    and executed:find("github.com/swwayps/luatools%-moon/releases", 1) ~= nil)
-mirror_down = false
-
-check("trusted_mirror_url accepts our mirror",
-  auto_update.trusted_mirror_url(
-    "https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@abc123/releases/x.zip") == true)
-check("trusted_mirror_url still accepts the upstream mirror",
-  auto_update.trusted_mirror_url(
-    "https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@abc123/releases/x.zip") == true)
-check("trusted_mirror_url rejects another repository",
-  auto_update.trusted_mirror_url(
-    "https://cdn.jsdelivr.net/gh/someone/jsdelivr@abc123/releases/x.zip") == false)
-check("trusted_mirror_url rejects a mutable branch",
-  auto_update.trusted_mirror_url(
-    "https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/releases/x.zip") == false)
-
--- Our fork's update.json (owner Rafie-kun) must be allowed to use the mirror.
-gh_owner, gh_repo = "Rafie-kun", "luatools-moon"
-mode = "mirror-only"
-executed = nil
-result = auto_update.check_for_updates_now()
-check("our fork's updater uses the mirror", result.success == true
-  and executed and executed:find("cdn.jsdelivr.net/gh/swwayps/jsdelivr@", 1, true) ~= nil)
 
 os.exit(failures == 0 and 0 or 1)

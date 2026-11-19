@@ -21,11 +21,11 @@ source "$INSTALL_SH" >/dev/null 2>&1
   [ "$LUMEN_BETA_PATH" = "dist/lumen-linux.zip" ]; }
 check "each component has a future-compatible beta artifact path" $?
 
-# The x64 port lives in its own repo; this fork keeps a release that always
-# resolves, so an unreachable port repo must not break installs.
-{ [ "$SLS_REPO" = "ogb4n/slssteam-moon-x64" ] &&
-  [ "$SLS_REPO_FALLBACK" = "Rafie-kun/slsteam-moon" ]; }
-check "the x64 port repo is preferred, with this fork as fallback" $?
+# The fork publishes the payload, so it is the only source probed by default:
+# ogb4n/slssteam-moon-x64 answers 404 and must not cost a request per install.
+{ [ "$SLS_REPO" = "Rafie-kun/slsteam-moon" ] &&
+  [ -z "$SLS_REPO_FALLBACK" ]; }
+check "the fork is the default source and no dead fallback is probed" $?
 
 { printf '%s\n' "slssteam-moon-x64-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
   printf '%s\n' "slsteam-moon-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
@@ -101,32 +101,27 @@ resolve_component_asset stable repo dist/component.zip '^component\\.zip$' any; 
   [ "$(printf '%s' "$RESOLVED_ASSET_INFO" | jq -r '.channel')" = stable ]; }
 check "Stable selection skips beta and supports any-release resolution" $?
 
-# ── mirror manifest: ours first, upstream only as the emergency copy ─────────
+# ── mirror manifest: one repository, commit-pinned archives ──────────────────
 DIGEST="$(printf 'a%.0s' {1..64})"
 MIRROR_OURS='{"schema":1,"components":{"lumen":{"tag":"v2.12","url":"https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@deadbeef/releases/lumen/v2.12/'"$DIGEST"'/lumen-linux.zip","sha256":"'"$DIGEST"'"}}}'
-MIRROR_UPSTREAM='{"schema":1,"components":{"lumen":{"tag":"v2.9","url":"https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@deadbeef/releases/lumen/v2.9/'"$DIGEST"'/lumen-linux.zip","sha256":"'"$DIGEST"'"}}}'
-MIRROR_OURS_FAIL=0
 api_get() {
 	case "$1" in
-		*Rafie-kun/jsdelivr*)
-			[ "$MIRROR_OURS_FAIL" = 1 ] && return 1
-			printf '%s' "$MIRROR_OURS" ;;
-		*swwayps/jsdelivr*) printf '%s' "$MIRROR_UPSTREAM" ;;
+		*Rafie-kun/jsdelivr*) printf '%s' "$MIRROR_OURS" ;;
 		*) return 1 ;;
 	esac
 }
 info="$(mirror_release_asset_info lumen)"
-check "mirror reads our fork's manifest first" \
+check "mirror reads this fork's manifest" \
 	"$([ "$(printf '%s' "$info" | jq -r '.tag')" = v2.12 ]; echo $?)"
-MIRROR_OURS_FAIL=1
-info="$(mirror_release_asset_info lumen)"
-check "an unavailable mirror falls back to upstream" \
-	"$([ "$(printf '%s' "$info" | jq -r '.tag')" = v2.9 ]; echo $?)"
-MIRROR_OURS_FAIL=0
 # An entry pointing at another repository is not ours to trust.
 MIRROR_OURS='{"schema":1,"components":{"lumen":{"tag":"v9","url":"https://cdn.jsdelivr.net/gh/swwayps/jsdelivr@deadbeef/x.zip","sha256":"'"$DIGEST"'"}}}'
 info="$(mirror_release_asset_info lumen)"
 check "mirror rejects an archive from another repository" \
+	"$([ -z "$(printf '%s' "$info" | jq -r '.url // empty')" ]; echo $?)"
+# A URL on a branch can be repointed after the digest is published.
+MIRROR_OURS='{"schema":1,"components":{"lumen":{"tag":"v9","url":"https://cdn.jsdelivr.net/gh/Rafie-kun/jsdelivr@main/x.zip","sha256":"'"$DIGEST"'"}}}'
+info="$(mirror_release_asset_info lumen)"
+check "mirror rejects a mutable branch URL" \
 	"$([ -z "$(printf '%s' "$info" | jq -r '.url // empty')" ]; echo $?)"
 
 echo ""
