@@ -21,12 +21,9 @@ end
 -- Sandbox HOME via os.getenv override.
 local sandbox = os.tmpname() .. "_dir"
 os.execute("mkdir -p '" .. sandbox .. "/.config/SLSsteam'")
-local orig_getenv = os.getenv
-local test_env = { HOME = sandbox, XDG_CONFIG_HOME = sandbox .. "/.config" }
-os.getenv = function(k)
-  if test_env[k] ~= nil then return test_env[k] end
-  return orig_getenv(k)
-end
+-- test_env holds XDG_CONFIG_HOME overrides used by later sections; sls_profile
+-- root is pinned directly below so os.getenv is not relied upon.
+local test_env = {}
 
 local cfg = sandbox .. "/.config/SLSsteam/config.yaml"
 local function w(s) local f = assert(io.open(cfg, "wb")); f:write(s); f:close() end
@@ -34,10 +31,13 @@ local function r() local f = assert(io.open(cfg, "rb")); local s = f:read("*a");
 
 local slsteam = dofile("plugin/backend/slsteam.lua")
 local profile = require("sls_profile")
-local profile_root = profile.root()
-io.write("DEBUG sls_profile.root=" .. tostring(profile_root) .. "\n")
-io.write("DEBUG cfg=" .. cfg .. "\n")
-io.flush()
+-- Pin the profile root to the sandbox so config_path() and cache_dir() always
+-- resolve here, unless the test switches XDG_CONFIG_HOME for profile tests.
+profile.root = function()
+  local xdg = test_env.XDG_CONFIG_HOME
+  if xdg and xdg ~= "" then return xdg .. "/SLSsteam" end
+  return sandbox .. "/.config/SLSsteam"
+end
 
 check("A1 register_app is absent", slsteam.register_app == nil)
 check("A2 unregister_app is absent", slsteam.unregister_app == nil)
