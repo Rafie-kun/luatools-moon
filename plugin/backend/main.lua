@@ -1734,6 +1734,75 @@ function GetAvailableThemes()
     return json_ok({ success = true, themes = {} })
 end
 
+-- ── Log collection + save ───────────────────────────────────────────────────
+-- Gathers Steam / Lumen / slsteam-moon logs into a zip (scrubbed of home-dir
+-- paths and session tokens) and saves it to disk so the user can attach it to
+-- Discord, a GitHub issue, or send it to a developer. No network, no tokens.
+local function find_collect_script()
+    local candidates = {
+        os.getenv("HOME") .. "/.local/share/Lumen/luatools/backend/scripts/slsm-collect-logs.sh",
+        os.getenv("HOME") .. "/.local/share/SLSsteam/tools/slsm-collect-logs.sh",
+    }
+    for _, path in ipairs(candidates) do
+        local f = io.open(path, "r")
+        if f then f:close(); return path end
+    end
+    return nil
+end
+
+local function read_file(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local data = f:read("*a")
+    f:close()
+    return data
+end
+
+function SaveLogs(options)
+    options = options or {}
+    local out_path = options.path
+
+    if not out_path or out_path == "" then
+        local ts = os.date("%Y%m%d-%H%M%S")
+        out_path = (os.getenv("HOME") or "") ..
+            "/.local/state/slsteam-moon/logs-" .. ts .. ".zip"
+    end
+
+    local script = find_collect_script()
+    if not script then
+        return json_ok({
+            success = false,
+            error   = "log collector script not found",
+        })
+    end
+
+    -- Run the collector with the requested output path.
+    local handle = io.popen("sh " .. script .. " " ..
+        (out_path:gsub("([^%w%._-])", "\\%1")) .. " 2>/dev/null", "r")
+    if not handle then
+        return json_ok({ success = false, error = "could not run log collector" })
+    end
+    local result = handle:read("*l")
+    handle:close()
+    if not result or result == "" then
+        return json_ok({ success = false,
+            error = "log collection produced no archive" })
+    end
+
+    -- Verify the archive exists and has content.
+    local zip_data = read_file(result)
+    if not zip_data then
+        return json_ok({ success = false, error = "could not read log archive" })
+    end
+
+    return json_ok({
+        success = true,
+        saved    = true,
+        path     = result,
+        bytes    = #zip_data,
+    })
+end
+
 -- ── Return lifecycle table ────────────────────────────────────────────────────
 
 return {
