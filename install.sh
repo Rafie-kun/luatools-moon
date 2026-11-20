@@ -256,16 +256,6 @@ preask_launcher_sudo() {
 		return 0
 	}
 
-	# Non-interactive (piped stdin): cannot prompt for a password, so skip
-	# sudo and fall back to user-local desktop coverage. Use
-	# SLSM_SUDO_DENIED=1 explicitly to force this path on a TTY too.
-	if [ -t 0 ]; then :; else
-		log_info "$(L "Non-interactive install: skipping sudo; user-local .desktop coverage remains the fallback." \
-		             "Instalação não interativa: pulando sudo; a cobertura .desktop local do usuário continua como fallback.")"
-		SLSM_SUDO_DENIED=1
-		return 0
-	fi
-
 	local tty="${SLSM_SUDO_TTY:-/dev/tty}"
 	if ! [ -e "$tty" ] || ! { : > "$tty"; } 2>/dev/null; then
 		log_info "$(L "No controlling terminal; user-local .desktop coverage remains the fallback." \
