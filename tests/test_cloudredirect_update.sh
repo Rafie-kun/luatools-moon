@@ -54,7 +54,7 @@ install_cloudredirect_so(){
 }
 
 reset_state(){ PROMPTED=0; DOWNLOADED=0; REPAIRED=0; PREASK_CLOUD=""; rm -rf "$CR_DIR"; }
-deploy_hook(){ mkdir -p "$CR_DIR"; printf 'hook\n' > "$CR_SO_PATH"; }
+deploy_hook(){ mkdir -p "$CR_DIR"; printf 'hook\n' > "$CR_SO_PATH"; printf 'cli\n' > "$CR_CLI_PATH"; chmod +x "$CR_CLI_PATH"; }
 
 # ── predicate ───────────────────────────────────────────────────────────────
 reset_state
@@ -77,6 +77,7 @@ ck "declined fresh install downloads nothing" "0" "$DOWNLOADED"
 reset_state
 deploy_hook
 printf '%s\n' "$PUBLISHED_STAMP" > "$CR_SO_STAMP"
+printf '%s\n' "$PUBLISHED_STAMP" > "$CR_CLI_STAMP"
 install_cloudredirect >/dev/null 2>&1
 ck "current install does not ask" "0" "$PROMPTED"
 ck "current install does not download" "0" "$DOWNLOADED"

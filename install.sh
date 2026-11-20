@@ -2742,7 +2742,7 @@ cloudredirect_installed() {
 # ETag of the published hook, or empty when it can't be determined (offline,
 # proxy that strips the header, ...). HEAD only — no payload is transferred.
 cr_published_stamp() {
-	local url="${1:-$CR_SO_URL}"
+	local url="${1:-}"
 	curl -fsSLI "$url" 2>/dev/null |
 		tr -d '\r' |
 		awk 'tolower($1) == "etag:" { sub(/^[^:]*:[[:space:]]*/, ""); stamp = $0 } END { print stamp }'
