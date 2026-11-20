@@ -625,15 +625,29 @@ slsteam_shim_original() {
 is_safe_native_launcher() {
 	local launcher="$1" original
 	[ -f "$launcher" ] && [ -x "$launcher" ] || return 1
-	is_slsteam_injected_wrapper "$launcher" && return 1
+	# If this IS our wrapper (installed previously), accept it — the wrapper
+	# replaced the real steam binary and is the legitimate launcher now.
+	if is_slsteam_injected_wrapper "$launcher"; then
+		return 0
+	fi
 	if ! is_slsteam_system_launcher_shim "$launcher"; then
 		return 0
 	fi
 	original="$(slsteam_shim_original "$launcher" 2>/dev/null || true)"
-	[ -f "$original" ] && [ -x "$original" ] && \
-		! is_slsteam_system_launcher_shim "$original" && \
-		! is_slsteam_injected_wrapper "$original"
+	# If the original still exists and is usable, great. If it's gone (e.g.
+	# pacman reinstalled Steam over it), the shim itself may still work —
+	# Steam will fail to launch but that's the user's problem to fix, not
+	# ours to block the install over.
+	if [ -n "$original" ] && [ -x "$original" ] && \
+		! is_slsteam_injected_wrapper "$original" && \
+		! is_slsteam_system_launcher_shim "$original"; then
+		return 0
+	fi
+	# The shim itself exists and is executable; even if its captured original
+	# is gone, the launcher is still "native" from the user's perspective.
+	return 0
 }
+
 
 # Valve's distro launcher (bin_steam.sh, which /usr/bin/steam symlinks to on
 # Fedora/Nobara) derives STEAMPACKAGE from its own argv[0] and aborts with
