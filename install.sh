@@ -1717,23 +1717,27 @@ release_asset_info() {
 # This avoids stamping metadata from a replacement upload while downloading the
 # URL of the asset it replaced. Returns 2 only when GitHub could not be read.
 github_release_asset_info() {
-	local repo="$1" glob="$2" mode="${3:-latest}" api meta
+	local repo="$1" glob="$2" mode="${3:-latest}" api meta owner name tag
+	owner="${repo%%/*}"
+	name="${repo#*/}"
 	if [ "$mode" = "any" ]; then
 		api="https://api.github.com/repos/${repo}/releases?per_page=50"
 		meta="$(api_get "$api")" || return 2
-		printf '%s' "$meta" | jq -c --arg glob "$glob" '
+		printf '%s' "$meta" | jq -c --arg glob "$glob" --arg owner "$owner" --arg repo "$name" '
 			[ .[] | select(.draft != true and .prerelease != true) as $r
 			  | $r.assets[]? | select(.name | test($glob))
 			  | {tag:$r.tag_name, asset_at:.created_at, updated_at:.updated_at,
-			     size:.size, id:.id, name:.name, url:.browser_download_url} ][0] // {}' \
+			     size:.size, id:.id, name:.name, url:.browser_download_url,
+			     raw_url:("https://raw.githubusercontent.com/" + $owner + "/" + $repo + "/" + $r.tag_name + "/" + .name)} ][0] // {}' \
 			2>/dev/null || printf '{}'
 	else
 		api="https://api.github.com/repos/${repo}/releases/latest"
 		meta="$(api_get "$api")" || return 2
-		printf '%s' "$meta" | jq -c --arg glob "$glob" '
+		printf '%s' "$meta" | jq -c --arg glob "$glob" --arg owner "$owner" --arg repo "$name" '
 			.tag_name as $tag | [ .assets[]? | select(.name | test($glob))
 			  | {tag:$tag, asset_at:.created_at, updated_at:.updated_at,
-			     size:.size, id:.id, name:.name, url:.browser_download_url} ][0] // {}' \
+			     size:.size, id:.id, name:.name, url:.browser_download_url,
+			     raw_url:("https://raw.githubusercontent.com/" + $owner + "/" + $repo + "/" + $tag + "/" + .name)} ][0] // {}' \
 			2>/dev/null || printf '{}'
 	fi
 }
@@ -2027,6 +2031,22 @@ download_resolved_asset() {
 	download_and_verify "$RESOLVED_ASSET_URL" "$out" "$label" "$expected" || rc=$?
 	[ "$rc" -eq 0 ] && return 0
 	[ "$rc" -eq 2 ] && return 2
+
+	# Try raw.githubusercontent.com as an additional fallback (useful when
+	# github.com is blocked but raw.githubusercontent.com is reachable, or
+	# vice versa). raw_url is set by github_release_asset_info.
+	local raw_url
+	raw_url="$(printf '%s' "$RESOLVED_ASSET_INFO" | jq -r '.raw_url // empty' 2>/dev/null)"
+	if [ -n "$raw_url" ] && [ "$raw_url" != "$RESOLVED_ASSET_URL" ]; then
+		log_warn "$(L "GitHub download failed; trying raw.githubusercontent.com." \
+		               "O download pelo GitHub falhou; tentando o raw.githubusercontent.com.")"
+		rm -f "$out" "$out.sha256"
+		rc=0
+		download_and_verify "$raw_url" "$out" "$label" "$expected" || rc=$?
+		[ "$rc" -eq 0 ] && { DOWNLOADED_ASSET_INFO="$RESOLVED_ASSET_INFO"; return 0; }
+		[ "$rc" -eq 2 ] && return 2
+	fi
+
 	[ -n "${RESOLVED_FALLBACK_URL:-}" ] || return "$rc"
 
 	log_warn "$(L "GitHub download failed; trying the jsDelivr mirror." \
