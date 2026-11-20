@@ -52,6 +52,10 @@ curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/instal
 
 # slsteam-moon + Lumen only
 curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | bash -s -- --noplugin
+
+# Non-interactive (piped) install — skips sudo entirely, falls back to
+# user-local .desktop coverage. Required when stdin is not a terminal.
+SLSM_SUDO_DENIED=1 bash <(curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh)
 ```
 
 ---
