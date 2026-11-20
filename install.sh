@@ -1722,7 +1722,20 @@ github_release_asset_info() {
 	name="${repo#*/}"
 	if [ "$mode" = "any" ]; then
 		api="https://api.github.com/repos/${repo}/releases?per_page=50"
-		meta="$(api_get "$api")" || return 2
+		meta="$(api_get "$api")" || {
+			# GitHub API unreachable: try raw.githubusercontent.com directly.
+			# The slsteam-moon repo keeps version in slsteam-moon/res/version.txt
+			# and releases as slsteam-moon/dist/slsteam-moon-linux-<ver>.zip.
+			raw_url="https://raw.githubusercontent.com/${repo}/slsteam-moon/res/version.txt"
+			raw_ver="$(curl -fsSL --connect-timeout 10 --max-time 20 "$raw_url" 2>/dev/null || true)"
+			if [ -n "$raw_ver" ]; then
+				raw_ver="${raw_ver#v}"
+				raw_asset="https://raw.githubusercontent.com/${repo}/main/slsteam-moon/dist/slsteam-moon-linux-${raw_ver}.zip"
+				printf '%s' "{\"tag\":\"v${raw_ver}\",\"url\":\"${raw_asset}\",\"raw_url\":\"${raw_asset}\"}"
+				return 0
+			fi
+			return 2
+		}
 		printf '%s' "$meta" | jq -c --arg glob "$glob" --arg owner "$owner" --arg repo "$name" '
 			[ .[] | select(.draft != true and .prerelease != true) as $r
 			  | $r.assets[]? | select(.name | test($glob))
@@ -1732,7 +1745,20 @@ github_release_asset_info() {
 			2>/dev/null || printf '{}'
 	else
 		api="https://api.github.com/repos/${repo}/releases/latest"
-		meta="$(api_get "$api")" || return 2
+		meta="$(api_get "$api")" || {
+			# GitHub API unreachable: try raw.githubusercontent.com directly.
+			# The slsteam-moon repo keeps version in slsteam-moon/res/version.txt
+			# and releases as slsteam-moon/dist/slsteam-moon-linux-<ver>.zip.
+			raw_url="https://raw.githubusercontent.com/${repo}/slsteam-moon/res/version.txt"
+			raw_ver="$(curl -fsSL --connect-timeout 10 --max-time 20 "$raw_url" 2>/dev/null || true)"
+			if [ -n "$raw_ver" ]; then
+				raw_ver="${raw_ver#v}"
+				raw_asset="https://raw.githubusercontent.com/${repo}/main/slsteam-moon/dist/slsteam-moon-linux-${raw_ver}.zip"
+				printf '%s' "{\"tag\":\"v${raw_ver}\",\"url\":\"${raw_asset}\",\"raw_url\":\"${raw_asset}\"}"
+				return 0
+			fi
+			return 2
+		}
 		printf '%s' "$meta" | jq -c --arg glob "$glob" --arg owner "$owner" --arg repo "$name" '
 			.tag_name as $tag | [ .assets[]? | select(.name | test($glob))
 			  | {tag:$tag, asset_at:.created_at, updated_at:.updated_at,
