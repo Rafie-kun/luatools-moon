@@ -630,23 +630,24 @@ is_safe_native_launcher() {
 	if is_slsteam_injected_wrapper "$launcher"; then
 		return 0
 	fi
+	# If it's not our wrapper shim, it's a real Steam launcher — accept it.
 	if ! is_slsteam_system_launcher_shim "$launcher"; then
 		return 0
 	fi
+	# It IS our shim — check if the original still exists.
 	original="$(slsteam_shim_original "$launcher" 2>/dev/null || true)"
 	# If the original still exists and is usable, great. If it's gone (e.g.
 	# pacman reinstalled Steam over it), the shim itself may still work —
 	# Steam will fail to launch but that's the user's problem to fix, not
 	# ours to block the install over.
-	if [ -n "$original" ] && [ -x "$original" ] && \
-		! is_slsteam_injected_wrapper "$original" && \
-		! is_slsteam_system_launcher_shim "$original"; then
+	if [ -n "$original" ] && [ -x "$original" ] && 		! is_slsteam_injected_wrapper "$original" && 		! is_slsteam_system_launcher_shim "$original"; then
 		return 0
 	fi
 	# The shim itself exists and is executable; even if its captured original
 	# is gone, the launcher is still "native" from the user's perspective.
 	return 0
 }
+
 
 
 # Valve's distro launcher (bin_steam.sh, which /usr/bin/steam symlinks to on
@@ -721,37 +722,27 @@ find_native_steam_launcher() {
 	local fixed_candidates="${STEAM_FIXED_CANDIDATES-/usr/bin/steam /usr/games/steam /usr/local/bin/steam /bin/steam}"
 	local search_path="${STEAM_SEARCH_PATH-${PATH:-}}"
 	local c dir resolved wrapper_dir
+	wrapper_dir="$HOME/.local/share/SLSsteam/path"
 	for c in $fixed_candidates; do
 		if is_safe_native_launcher "$c"; then
 			printf '%s\n' "$c"
 			return 0
 		fi
 	done
-	# NixOS has no /usr/bin: `programs.steam.enable` symlinks the launcher into
-	# the user's profile (e.g. /run/current-system/sw/bin/steam) instead. Accept
-	# `steam` off PATH only when it resolves into the Nix store, so we don't
-	# misdetect a flatpak/snap shim that happens to shadow the name. Inspect
-	# every PATH entry: setup.sh prepends its own wrapper directory, so the
-	# first match on a reinstall is not necessarily the native launcher.
-	if [ "$(get_distro_id)" = "nixos" ]; then
-		wrapper_dir="$HOME/.local/share/SLSsteam/path"
-		while IFS= read -r dir; do
-			[ -n "$dir" ] || dir="."
-			c="${dir%/}/steam"
-			[ -x "$c" ] && is_safe_native_launcher "$c" || continue
-			case "$c" in
-				"$wrapper_dir"/*) continue ;;
-			esac
-			resolved="$(readlink -f "$c" 2>/dev/null || printf '%s\n' "$c")"
-			case "$resolved" in
-				"$wrapper_dir"/*) continue ;;
-				/nix/store/*)
-					printf '%s\n' "$c"
-					return 0
-					;;
-			esac
-		done < <(printf '%s\n' "$search_path" | tr ':' '\n')
-	fi
+	# Fallback: search PATH for any executable named 'steam' that isn't our
+	# wrapper. This catches distros that put steam in non-standard locations.
+	while IFS= read -r dir; do
+		[ -n "$dir" ] || dir="."
+		c="${dir%/}/steam"
+		[ -x "$c" ] || continue
+		case "$c" in
+			"$wrapper_dir"*) continue ;;
+		esac
+		if is_safe_native_launcher "$c"; then
+			printf '%s\n' "$c"
+			return 0
+		fi
+	done < <(printf '%s\n' "$search_path" | tr ':' '\n')
 	return 1
 }
 
