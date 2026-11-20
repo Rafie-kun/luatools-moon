@@ -6,7 +6,7 @@ Set up slsteam-moon, Lumen and the LuaTools plugin automatically with a single c
 
 This fork — same installer, plus the store button fix, the Workshop writer, and
 the 64-bit (`steamrt64`) port from
-[ogb4n/slssteam-moon-x64](https://github.com/ogb4n/slssteam-moon-x64) (installed
+[ogb4n/slsteam-moon-x64](https://github.com/ogb4n/slsteam-moon-x64) (installed
 from this fork's builds when that repo has no reachable release) instead of
 upstream's 32-bit v2.9:
 

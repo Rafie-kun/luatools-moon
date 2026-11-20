@@ -22,12 +22,12 @@ source "$INSTALL_SH" >/dev/null 2>&1
 check "each component has a future-compatible beta artifact path" $?
 
 # The fork publishes the payload, so it is the only source probed by default:
-# ogb4n/slssteam-moon-x64 answers 404 and must not cost a request per install.
+# ogb4n/slsteam-moon-x64 answers 404 and must not cost a request per install.
 { [ "$SLS_REPO" = "Rafie-kun/slsteam-moon" ] &&
   [ -z "$SLS_REPO_FALLBACK" ]; }
 check "the fork is the default source and no dead fallback is probed" $?
 
-{ printf '%s\n' "slssteam-moon-x64-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
+{ printf '%s\n' "slsteam-moon-x64-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
   printf '%s\n' "slsteam-moon-linux-3.2.zip" | grep -Eq "$SLS_ASSET_GLOB" &&
   ! printf '%s\n' "slsteam-moon-linux-3.2.zip.sha256" | grep -Eq "$SLS_ASSET_GLOB"; }
 check "release asset glob accepts both payload names" $?
