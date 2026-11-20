@@ -6,12 +6,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-for dependency in curl jq luajit node python3 tar unzip zip; do
+for dependency in curl jq luajit python3 tar unzip zip; do
   command -v "$dependency" >/dev/null 2>&1 || {
     echo "$dependency is required" >&2
     exit 2
   }
 done
+# Node.js may be installed as `node` or `nodejs` depending on the distro.
+command -v node >/dev/null 2>&1 || command -v nodejs >/dev/null 2>&1 || {
+  echo "node (or nodejs) is required" >&2
+  exit 2
+}
 
 command -v 7zz >/dev/null 2>&1 \
   || command -v 7z >/dev/null 2>&1 \
