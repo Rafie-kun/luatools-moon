@@ -33,6 +33,11 @@ local function w(s) local f = assert(io.open(cfg, "wb")); f:write(s); f:close() 
 local function r() local f = assert(io.open(cfg, "rb")); local s = f:read("*a"); f:close(); return s end
 
 local slsteam = dofile("plugin/backend/slsteam.lua")
+local profile = require("sls_profile")
+local profile_root = profile.root()
+io.write("DEBUG sls_profile.root=" .. tostring(profile_root) .. "\n")
+io.write("DEBUG cfg=" .. cfg .. "\n")
+io.flush()
 
 check("A1 register_app is absent", slsteam.register_app == nil)
 check("A2 unregister_app is absent", slsteam.unregister_app == nil)
