@@ -55,7 +55,10 @@ curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/instal
 
 # Non-interactive (piped) install — skips sudo entirely, falls back to
 # user-local .desktop coverage. Required when stdin is not a terminal.
+# bash/sh/zsh:
 SLSM_SUDO_DENIED=1 bash <(curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh)
+# fish (no process substitution):
+curl -fsSL https://raw.githubusercontent.com/Rafie-kun/luatools-moon/main/install.sh | SLSM_SUDO_DENIED=1 bash
 ```
 
 ---
