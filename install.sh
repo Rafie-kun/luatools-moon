@@ -35,16 +35,16 @@ OPT_LUMEN_CHANNEL="stable"
 # Repositories / release sources
 # ----------------------------------------------------------------------------
 # This fork publishes slsteam-moon-linux-<ver>.zip from its own releases, so it
-# is the primary source. ogb4n/slssteam-moon-x64 is the port the fork derives
+# is the primary source. ogb4n/slsteam-moon-x64 is the port the fork derives
 # from, but it answers 404, so it is not probed unless asked for: set
-# SLS_REPO_FALLBACK=ogb4n/slssteam-moon-x64 to make it a secondary source.
+# SLS_REPO_FALLBACK=ogb4n/slsteam-moon-x64 to make it a secondary source.
 SLS_REPO="${SLS_REPO:-Rafie-kun/slsteam-moon}"
 SLS_REPO_FALLBACK="${SLS_REPO_FALLBACK-}"
 SLS_ASSET_PREFIX="slsteam-moon-linux"          # asset is slsteam-moon-linux-<ver>.zip
 SLS_BETA_PATH="dist/slsteam-moon-linux.zip"
-# The x64 port publishes slssteam-moon-x64-<ver>.zip; this fork publishes
+# The x64 port publishes slsteam-moon-x64-<ver>.zip; this fork publishes
 # slsteam-moon-linux-<ver>.zip. Accept both, and ignore the .sha256 sidecar.
-SLS_ASSET_GLOB="^(slsteam-moon-linux|slssteam-moon-x64-linux)-.*\\.zip$"
+SLS_ASSET_GLOB="^(slsteam-moon-linux|slsteam-moon-x64-linux)-.*\\.zip$"
 
 PLUGIN_REPO="Rafie-kun/luatools-moon"
 PLUGIN_ASSET="luatools-linux.zip"
