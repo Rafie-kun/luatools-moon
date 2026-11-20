@@ -26,4 +26,5 @@ return {
   "GetLuaToolsFixesCatalogue", "GetLuaToolsFixesForGame", "GetLuaToolsAddRecommendation",
   "StartLuaToolsRecommendedAdd", "StartLuaToolsFix",
   "CompleteLuaToolsFixApply",
+  "SaveLogs",
 }
