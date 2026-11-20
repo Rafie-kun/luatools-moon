@@ -22,7 +22,7 @@ end
 local sandbox = os.tmpname() .. "_dir"
 os.execute("mkdir -p '" .. sandbox .. "/.config/SLSsteam'")
 local orig_getenv = os.getenv
-local test_env = { HOME = sandbox }
+local test_env = { HOME = sandbox, XDG_CONFIG_HOME = sandbox .. "/.config" }
 os.getenv = function(k)
   if test_env[k] ~= nil then return test_env[k] end
   return orig_getenv(k)
