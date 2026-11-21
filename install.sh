@@ -27,6 +27,7 @@ set -uo pipefail
 OPT_NOPLUGIN=0
 OPT_HELP=0
 OPT_BAD_ARG=""
+OPT_UNATTENDED=0
 OPT_SLS_CHANNEL="stable"
 OPT_PLUGIN_CHANNEL="stable"
 OPT_LUMEN_CHANNEL="stable"
@@ -569,6 +570,13 @@ ensure_sudo() {
 	[ "$(id -u)" -ne 0 ] || return 0
 	command -v sudo >/dev/null 2>&1 || return 0
 	sudo -n true 2>/dev/null && return 0   # already cached / passwordless
+	# In unattended mode we cannot prompt for a password; fall back to
+	# user-local coverage instead of system-wide sudo.
+	if [ "$OPT_UNATTENDED" = 1 ]; then
+		log_info "$(L "Unattended mode: skipping sudo; user-local coverage remains the fallback." \
+		             "Modo sem atendimento: pulando sudo; a cobertura local do usuário continua como fallback.")"
+		return 0
+	fi
 	sudo_hint
 	sudo -v </dev/tty >/dev/tty 2>&1 || fail "$(L \
 		"Administrator password not provided; installation cancelled." \
@@ -1239,6 +1247,13 @@ check_dependencies() {
 # check_dependencies), and only after the machine has been validated, so sudo
 # and the package manager never run on a host the installer will reject.
 install_dependencies() {
+	# Unattended mode: cannot install packages without sudo, so skip. Missing
+	# tools degrade gracefully (e.g. no in-Steam popups without notify-send).
+	if [ "$OPT_UNATTENDED" = 1 ]; then
+		log_info "$(L "Unattended mode: skipping dependency installation." \
+		             "Modo sem atendimento: pulando instalação de dependências.")"
+		return 0
+	fi
 	# Standalone/defensive: if the preflight gate did not run, probe now.
 	[ "${#DEP_MISSING_TOOLS[@]}" -gt 0 ] || detect_missing_tools
 	if [ "${#DEP_MISSING_TOOLS[@]}" -eq 0 ]; then
@@ -3454,6 +3469,7 @@ parse_args() {
 				shift
 				;;
 			-h|--help)  OPT_HELP=1 ;;
+			--unattended|--auto) OPT_UNATTENDED=1 ;;
 			*)          OPT_BAD_ARG="$1"; return 1 ;;
 		esac
 		shift
@@ -3493,8 +3509,14 @@ main() {
 	# On SteamOS / Bazzite and derivatives the on-screen keyboard needs Steam
 	# running, so ask the optional yes/no questions NOW, before we stop Steam.
 	# No privilege prompt is made on immutable systems.
-	preask_prompts
-	preask_launcher_sudo
+	# In unattended mode skip all interactive prompts.
+	if [ "$OPT_UNATTENDED" != 1 ]; then
+		preask_prompts
+		preask_launcher_sudo
+	else
+		log_info "$(L "Unattended install: skipping interactive prompts." \
+		             "Instalação sem atendimento: pulando prompts interativos.")"
+	fi
 
 	print_section "$(L "Stopping Steam" "Parando a Steam")"
 	stop_steam
