@@ -3272,7 +3272,7 @@ install_decky() {
 	decky_script="$tmp/install-decky.sh"
 
 	# Download Decky Loader install script from the official repo.
-	if ! curl -fsSL "https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/install.sh" \
+	if ! curl -fsSL "https://github.com/SteamDeckHomebrew/decky-installer/releases/latest/download/install_release.sh" \
 		-o "$decky_script" 2>/dev/null; then
 		log_error "$(L "Failed to download Decky Loader installer." \
 		             "Falha ao baixar o instalador do Decky Loader.")"
