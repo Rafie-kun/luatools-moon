@@ -3452,6 +3452,9 @@ EOF
 should_autolaunch() {
 	[ "${OPT_NOLAUNCH:-0}" = 1 ] && return 1
 	[ -n "${SLS_NO_LAUNCH:-}" ] && return 1
+	# In unattended mode (curl | bash), try to launch anyway — the user ran the
+	# installer explicitly and expects Steam to come back up.
+	[ "$OPT_UNATTENDED" = 1 ] && return 0
 	[ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ] && return 1
 	return 0
 }
@@ -3462,12 +3465,30 @@ should_autolaunch() {
 do_autolaunch() {
 	local wrapper="$HOME/.local/share/SLSsteam/path/steam"
 	[ -x "$wrapper" ] || return 0
-	# Start Steam injected, detached. No -silent: a silent first launch doesn't
-	# survive Steam's post-update self-relaunch (the client updates on a fresh
-	# install, then re-launches; -silent broke that relaunch), and a normal
-	# window also makes the first-run client update visible instead of looking
-	# like the installer hung.
-	setsid nohup "$wrapper" >/dev/null 2>&1 < /dev/null &
+
+	# Start Steam injected, detached, detached from this shell so it survives
+	# the installer exiting. Try setsid first (detaches from controlling
+	# terminal), fall back to plain nohup, fall back to plain background.
+	if command -v setsid >/dev/null 2>&1; then
+		setsid nohup "$wrapper" >/dev/null 2>&1 < /dev/null &
+	elif command -v nohup >/dev/null 2>&1; then
+		nohup "$wrapper" >/dev/null 2>&1 < /dev/null &
+	else
+		"$wrapper" >/dev/null 2>&1 < /dev/null &
+	fi
+
+	# Give Steam a moment to start before the installer exits.
+	sleep 2
+
+	# Verify Steam started; if not, tell the user how to start it manually.
+	if pgrep -x steam >/dev/null 2>&1 || pgrep -f 'steamwebhelper' >/dev/null 2>&1; then
+		log_success "$(L "Steam started via wrapper." \
+		             "Steam iniciado via wrapper.")"
+	else
+		log_warn "$(L "Steam did not auto-start. Start it manually:" \
+		             "A Steam não iniciou automaticamente. Inicie manualmente:")"
+		log_info "  $wrapper"
+	fi
 }
 
 # Pure option parser: sets install switches and each component's release
