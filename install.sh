@@ -3281,11 +3281,16 @@ install_decky() {
 	fi
 
 	# Run the Decky installer. It handles its own sudo if needed.
+	# Decky requires sudo/root on SteamOS/SteamOS systems. If it fails, we
+	# log a warning and continue — Decky is optional, everything else works.
 	if ! bash "$decky_script" >/dev/null 2>&1; then
-		log_error "$(L "Decky Loader installer failed." \
+		log_warn "$(L "Decky Loader installer failed." \
 		             "O instalador do Decky Loader falhou.")"
+		log_warn "$(L "You can install Decky manually later:" \
+		             "Você pode instalar o Decky mais tarde:" )"
+		log_info "  curl -L https://github.com/SteamDeckHomebrew/decky-installer/releases/latest/download/install_release.sh | sh"
 		rm -rf "$tmp"
-		return 1
+		return 0
 	fi
 
 	rm -rf "$tmp"
@@ -3295,9 +3300,12 @@ install_decky() {
 		             "Decky Loader instalado com sucesso.")"
 		return 0
 	else
-		log_error "$(L "Decky Loader installation did not complete." \
+		log_warn "$(L "Decky Loader installation did not complete." \
 		             "A instalação do Decky Loader não foi concluída.")"
-		return 1
+		log_info "$(L "Try running the installer manually:" \
+		             "Tente executar o instalador manualmente:")"
+		log_info "  curl -L https://github.com/SteamDeckHomebrew/decky-installer/releases/latest/download/install_release.sh | sh"
+		return 0
 	fi
 }
 
