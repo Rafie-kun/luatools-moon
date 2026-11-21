@@ -28,6 +28,7 @@ OPT_NOPLUGIN=0
 OPT_HELP=0
 OPT_BAD_ARG=""
 OPT_UNATTENDED=0
+OPT_DECKY=0
 OPT_SLS_CHANNEL="stable"
 OPT_PLUGIN_CHANNEL="stable"
 OPT_LUMEN_CHANNEL="stable"
@@ -3253,6 +3254,61 @@ install_cloudredirect() {
 	repair_cas_save_layout
 }
 
+# install_decky — install Decky Loader for Steam Deck / desktop Steam.
+# Downloads and runs the official Decky Loader install script. After
+# installation, the caller should restart Steam so Decky loads.
+install_decky() {
+	if decky_installed; then
+		log_info "$(L "Decky Loader is already installed." \
+		             "O Decky Loader já está instalado.")"
+		return 0
+	fi
+
+	log_info "$(L "Installing Decky Loader..." \
+	             "Instalando o Decky Loader...")"
+
+	local tmp decky_script
+	tmp="$(mktemp -d)" || return 1
+	decky_script="$tmp/install-decky.sh"
+
+	# Download Decky Loader install script from the official repo.
+	if ! curl -fsSL "https://raw.githubusercontent.com/SteamDeckHomebrew/decky-loader/main/install.sh" \
+		-o "$decky_script" 2>/dev/null; then
+		log_error "$(L "Failed to download Decky Loader installer." \
+		             "Falha ao baixar o instalador do Decky Loader.")"
+		rm -rf "$tmp"
+		return 1
+	fi
+
+	# Run the Decky installer. It handles its own sudo if needed.
+	if ! bash "$decky_script" >/dev/null 2>&1; then
+		log_error "$(L "Decky Loader installer failed." \
+		             "O instalador do Decky Loader falhou.")"
+		rm -rf "$tmp"
+		return 1
+	fi
+
+	rm -rf "$tmp"
+
+	if decky_installed; then
+		log_success "$(L "Decky Loader installed successfully." \
+		             "Decky Loader instalado com sucesso.")"
+		return 0
+	else
+		log_error "$(L "Decky Loader installation did not complete." \
+		             "A instalação do Decky Loader não foi concluída.")"
+		return 1
+	fi
+}
+
+# decky_installed — returns 0 if Decky Loader is detected.
+decky_installed() {
+	[ -d "$HOME/.local/share/decky" ] && return 0
+	[ -d "$HOME/.steam/steam/plugins/decky-loader" ] && return 0
+	[ -d "$HOME/.steam/steamrt64/plugins/decky-loader" ] && return 0
+	return 1
+}
+
 # Read the coverage policy persisted by slsteam-moon. Older installs may not
 # have a state file, and malformed values must retain the user-local desktop
 # fallback rather than changing launch behavior unexpectedly.
@@ -3470,6 +3526,7 @@ parse_args() {
 				;;
 			-h|--help)  OPT_HELP=1 ;;
 			--unattended|--auto) OPT_UNATTENDED=1 ;;
+			--decky) OPT_DECKY=1 ;;
 			*)          OPT_BAD_ARG="$1"; return 1 ;;
 		esac
 		shift
@@ -3560,6 +3617,11 @@ main() {
 	# itself defaults to "no" on Enter — even with --noplugin.
 	print_section "$(L "Setting up cloud saves (CloudRedirect)" "Configurando cloud saves (CloudRedirect)")"
 	install_cloudredirect
+
+	if [ "$OPT_DECKY" = 1 ]; then
+		print_section "$(L "Installing Decky Loader" "Instalando o Decky Loader")"
+		install_decky
+	fi
 
 	print_complete
 
