@@ -135,6 +135,42 @@ log_step()    { echo -e "${MOON}•${NC} $1"; }
 
 fail() { log_error "$1"; exit 1; }
 
+# --- SAFETY: Never delete user game data or config ---------------------------
+# These directories are explicitly protected. Any cleanup code that attempts
+# to remove them will be skipped. This prevents accidental deletion of
+# installed games, Proton prefixes, save files, or user settings during
+# updates or uninstall.
+PROTECTED_DIRS=(
+	"$HOME/.local/share/Steam/steamapps"
+	"$HOME/.steam/steam/steamapps"
+	"$HOME/.local/share/Steam/config"
+	"$HOME/.steam/steam/config"
+	"$HOME/.local/share/Steam/steamapps/compatdata"
+	"$HOME/.steam/steam/steamapps/compatdata"
+	"$HOME/.local/share/Lumen"
+	"$HOME/.steam/steam/userdata"
+	"$HOME/.local/share/Steam/userdata"
+)
+is_protected() {
+	local target="$1"
+	target="$(readlink -f "$target" 2>/dev/null || echo "$target")"
+	for p in "${PROTECTED_DIRS[@]}"; do
+		p="$(readlink -f "$p" 2>/dev/null || echo "$p")"
+		if [ "$target" = "$p" ] || [[ "$target" == "$p/"* ]]; then
+			return 0
+		fi
+	done
+	return 1
+}
+safe_rm() {
+	local target="$1"
+	if is_protected "$target"; then
+		log_warn "$(L "SKIPPING protected directory: $target" "Pulando diretório protegido: $target")"
+		return 0
+	fi
+	rm -rf "$target" 2>/dev/null || true
+}
+
 print_banner() {
 	echo ""
 	echo -e "${MOON}${BOLD}"
@@ -1426,7 +1462,7 @@ cleanup_previous_install() {
 				continue
 			fi
 			log_step "$(L "Removing old plugin: $p" "Removendo plugin antigo: $p")"
-			rm -rf "$p" 2>/dev/null || true
+			safe_rm "$p"
 		done
 	done
 
@@ -1435,7 +1471,7 @@ cleanup_previous_install() {
 	for d in "$HOME/.local/share/luatools" "$HOME/.config/luatools" "$HOME/.luatools"; do
 		if [ -e "$d" ]; then
 			log_step "$(L "Removing old data dir: $d" "Removendo dir de dados antigo: $d")"
-			rm -rf "$d" 2>/dev/null || true
+			safe_rm "$d"
 		fi
 	done
 
@@ -1471,7 +1507,7 @@ cleanup_previous_install() {
 	for d in "$HOME/.headcrab"; do
 		if [ -e "$d" ]; then
 			log_step "$(L "Removing $d" "Removendo $d")"
-			rm -rf "$d" 2>/dev/null || true
+			safe_rm "$d"
 		fi
 	done
 	rm -f "$HOME/.local/share/applications/headcrab.desktop" 2>/dev/null || true
@@ -1485,8 +1521,10 @@ cleanup_previous_install() {
 		             "Removendo instalação antiga do SLSsteam (~/.local/share/SLSsteam)")"
 		# setup.sh owns the desktop backup lifecycle. Preserve only that directory
 		# while replacing old binaries/wrapper; no .desktop is read or changed here.
-		find "$HOME/.local/share/SLSsteam" -mindepth 1 -maxdepth 1 \
-			! -name backup ! -name system-launcher-backup -exec rm -rf -- {} + 2>/dev/null || true
+		while IFS= read -r -d '' item; do
+			safe_rm "$item"
+		done < <(find "$HOME/.local/share/SLSsteam" -mindepth 1 -maxdepth 1 \
+			! -name backup ! -name system-launcher-backup -print0 2>/dev/null || true)
 	fi
 
 	# --- Arch: system slssteam package conflicts with the local install ---
@@ -1565,6 +1603,14 @@ remove_millennium_framework() {
 	local xdg_data="${XDG_DATA_HOME:-$HOME/.local/share}/millennium"
 	local legacy="$HOME/.millennium"
 	local steam_root="$HOME/.steam/steam"
+
+	# --- SAFETY: Never delete user game data -------------------------------
+	if is_protected "$xdg_config" || is_protected "$xdg_data" || is_protected "$legacy" || \
+	   is_protected "$steam_root/millennium"; then
+		log_error "$(L "Refusing to uninstall: protected user data directory detected" \
+		             "Recusando desinstalação: diretório de dados do usuário protegido detectado")"
+		return 1
+	fi
 
 	local present=0
 	if [ -d /usr/lib/millennium ] || [ -d /usr/share/millennium ] \
