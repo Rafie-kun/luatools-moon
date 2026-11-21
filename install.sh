@@ -1671,7 +1671,7 @@ latest_release_asset_url() {
 	esac
 	meta="$(api_get "$api")" || return 2
 	printf '%s' "$meta" | jq -r --arg glob "$asset_glob" \
-		'.assets[] | select(.name | test($glob)) | .browser_download_url' 2>/dev/null | head -n1
+		'if .prerelease != true then .assets[]? | select(.name | test($glob)) | .browser_download_url else empty end' 2>/dev/null | head -n1
 }
 
 # Like latest_release_asset_url but scans ALL releases (newest first) for the
@@ -1712,7 +1712,7 @@ release_asset_info() {
 		api="https://api.github.com/repos/${repo}/releases/latest"
 		meta="$(api_get "$api")" || { printf '{}'; return 0; }
 		printf '%s' "$meta" | jq -c --arg glob "$glob" \
-			'.tag_name as $t | [ .assets[]? | select(.name | test($glob))
+			'select(.prerelease != true) | .tag_name as $t | [ .assets[]? | select(.name | test($glob))
 			   | {tag:$t, asset_at:.created_at, size:.size, id:.id} ][0] // {}' \
 			2>/dev/null || printf '{}'
 	fi
@@ -1765,7 +1765,7 @@ github_release_asset_info() {
 			return 2
 		}
 		printf '%s' "$meta" | jq -c --arg glob "$glob" --arg owner "$owner" --arg repo "$name" '
-			.tag_name as $tag | [ .assets[]? | select(.name | test($glob))
+			select(.prerelease != true) | .tag_name as $tag | [ .assets[]? | select(.name | test($glob))
 			  | {tag:$tag, asset_at:.created_at, updated_at:.updated_at,
 			     size:.size, id:.id, name:.name, url:.browser_download_url,
 			     raw_url:("https://raw.githubusercontent.com/" + $owner + "/" + $repo + "/" + $tag + "/" + .name)} ][0] // {}' \
